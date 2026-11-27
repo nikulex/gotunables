@@ -113,7 +113,7 @@ type Store interface {
 
 | | |
 |---|---|
-| `GET /` | the UI: one embedded HTML file, no build, works on phones. Click a group's heading to open it on its own page (`#/checkout.button`) with Back and breadcrumbs. Edits are collected (the changed fields get an orange *); a sticky header shows **Save** (Ctrl/Cmd+S) and **Discard** while there are any |
+| `GET /` | the UI: one embedded HTML file, no build, works on phones. Click a group's heading to open it on its own page (`#/checkout.button`) with the breadcrumbs in the navbar (every parent is a link). Edits are collected (the changed fields get an orange *); a sticky header shows **Save** (Ctrl/Cmd+S) and **Discard** while there are any |
 | `GET /meta` | `{"name", "description", "protocol": 1}` |
 | `GET /schema` | `{"groups": [{key, name, desc}], "fields": [{key, name, type, ui, desc, default, value, modified, enum, min, max, precision}]}`; a list or a set has `type: "list"\|"set"` and `item` (the type of an item; `enum`, `min`, `max`, `precision` are the item's), `minlen`, `maxlen`, and its `value` is an array | |
 | `PUT /values/{key}` | body `{"value": ...}`, returns the updated field |

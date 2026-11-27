@@ -106,16 +106,19 @@ button,input,textarea{font-family:inherit}
 .counter-input{flex:none;min-width:2.4rem;padding:0;text-align:center;border-radius:0} /* the width is set from the longest value */
 
 /* ---- Breadcrumb ---- */
-.breadcrumb-list{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0;padding:0;list-style:none;overflow-wrap:break-word;font-size:14px;line-height:20px;color:hsl(var(--muted-foreground))}
-.breadcrumb-item{display:inline-flex;align-items:center;gap:6px}
+/* inline, so that the crumbs run on after the name and wrap like words; a chevron leads each crumb and never stays behind it */
+.breadcrumb-list{display:inline;margin:0;padding:0;list-style:none;font-size:14px;line-height:20px;color:hsl(var(--muted-foreground))}
+.breadcrumb-item{display:inline-block;white-space:nowrap;margin-left:6px}
 .breadcrumb-link{color:inherit;text-decoration:none;transition:color .15s}
 .breadcrumb-link:hover{color:hsl(var(--foreground))}
 .breadcrumb-page{font-weight:400;color:hsl(var(--foreground))}
-.breadcrumb-separator{display:inline-flex}
-.breadcrumb-separator svg{width:14px;height:14px}
-@media (min-width:640px){.breadcrumb-list{gap:10px}.breadcrumb-item{gap:10px}}
+.breadcrumb-separator{margin-right:6px}
+.breadcrumb-separator svg{display:inline-block;width:14px;height:14px;vertical-align:-2px} /* on the baseline, its middle at the middle of the letters */
+@media (min-width:640px){.breadcrumb-item{margin-left:10px}.breadcrumb-separator{margin-right:10px}}
 nav[hidden],a.btn[hidden]{display:none}
-#crumbs{margin:0 0 20px}
+/* the breadcrumbs go on in the navbar right after the name, at their own (shadcn) size; what does not fit wraps to the next line */
+#crumbs{display:inline}
+#crumbs[hidden]{display:none}
 
 .actions[hidden]{display:none}
 
@@ -126,9 +129,12 @@ nav[hidden],a.btn[hidden]{display:none}
 /* the navbar is see-through over the hero; once the hero has gone under it, it gets its blur, its line and the name */
 .bar{position:sticky;top:0;z-index:10;border-bottom:1px solid transparent;transition:border-color .3s,background-color .3s,backdrop-filter .3s,-webkit-backdrop-filter .3s}
 .bar.stuck{border-bottom-color:hsl(var(--border));background:hsl(var(--background)/.92);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
-.bar-title{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:20px;line-height:28px;font-weight:700;letter-spacing:-.025em;opacity:0;transform:translateY(6px);transition:opacity .3s,transform .3s}
+.bar-title{display:inline-block;font-size:20px;line-height:28px;font-weight:700;letter-spacing:-.025em;opacity:0;transform:translateY(6px);transition:opacity .3s,transform .3s}
 .bar.stuck .bar-title{opacity:1;transform:none}
-.hero{padding:16px 0 60px}
+.bar-home{color:inherit;text-decoration:none;border-radius:calc(var(--radius) - 4px)}
+.bar-home:focus-visible{outline:none;box-shadow:0 0 0 1px hsl(var(--ring))}
+.bar:not(.stuck) .bar-home{pointer-events:none} /* the name is not there yet */
+.hero{padding:0 0 36px}
 .hero[hidden]{display:none}
 .hero-title{margin:0;font-size:44px;line-height:1.05;font-weight:800;letter-spacing:-.035em;overflow-wrap:anywhere}
 .hero-desc{margin:14px 0 0;max-width:38rem;font-size:20px;line-height:1.5;font-weight:450;white-space:pre-line;color:hsl(var(--foreground)/.85)}
@@ -136,9 +142,9 @@ nav[hidden],a.btn[hidden]{display:none}
 .action{width:6.5rem} /* the same width for both buttons */
 .action svg{display:none;width:16px;height:16px}
 .bar-in{display:flex;min-height:64px;max-width:768px;align-items:center;justify-content:space-between;gap:12px;margin:0 auto;padding:12px 24px}
-.title{display:flex;min-width:0;align-items:center;gap:12px}
+.title{flex:1;min-width:0;line-height:20px} /* the name and the crumbs are one line of text: the same baseline, and a wrap goes on under the name */
 .actions{display:flex;flex:none;gap:8px}
-main{max-width:768px;margin:0 auto;padding:24px 24px calc(64px + env(safe-area-inset-bottom))}
+main{max-width:768px;margin:0 auto;padding:32px 24px calc(64px + env(safe-area-inset-bottom))}
 
 /* levels: 1 is the biggest, every next level is smaller */
 .group.level-1{margin-top:56px}
@@ -181,7 +187,7 @@ main{max-width:768px;margin:0 auto;padding:24px 24px calc(64px + env(safe-area-i
 /* Phones: same layout, the control stays opposite the name */
 @media (max-width:640px){
   .bar-in{min-height:56px;padding:10px 16px}
-  .hero{padding:10px 16px 36px}
+  .hero{padding:0 16px 24px}
   .hero-title{font-size:34px}
   .hero-desc{margin-top:10px;font-size:17px}
   .bar-title{font-size:18px}
@@ -189,8 +195,8 @@ main{max-width:768px;margin:0 auto;padding:24px 24px calc(64px + env(safe-area-i
   .action{width:36px;padding:0}
   .action svg{display:block}
   .action .btn-text{display:none}
-  main{padding:16px 0 calc(48px + env(safe-area-inset-bottom))}
-  .banner,#crumbs{padding:0 16px}
+  main{padding:24px 0 calc(48px + env(safe-area-inset-bottom))}
+  .banner{padding:0 16px}
   .group.level-1{margin-top:44px}
   .group.level-2{margin-top:18px}
   .group.level-3{margin-top:14px}
@@ -222,7 +228,7 @@ main{max-width:768px;margin:0 auto;padding:24px 24px calc(64px + env(safe-area-i
 <body>
 <header class="bar" id="bar">
   <div class="bar-in">
-    <div class="title"><span class="bar-title" id="name">tunables</span></div>
+    <div class="title"><a class="bar-home" href="#" aria-label="Main page"><span class="bar-title" id="name">tunables</span></a><nav id="crumbs" aria-label="breadcrumb" hidden></nav></div>
     <div class="actions" id="actions" hidden></div>
   </div>
 </header>
@@ -231,7 +237,6 @@ main{max-width:768px;margin:0 auto;padding:24px 24px calc(64px + env(safe-area-i
     <h1 class="hero-title" id="heroName">tunables</h1>
     <p class="hero-desc" id="desc"></p>
   </section>
-  <nav id="crumbs" aria-label="breadcrumb" hidden></nav>
   <p class="banner" id="banner" hidden></p>
   <div id="root"></div>
 </main>
@@ -641,19 +646,20 @@ function Counter({ type, decimals, min, max, step, onChange }) {
 }
 
 // shadcn Breadcrumb: links to the parents, the current page last and not a link.
-function Breadcrumb(items) {
+function Breadcrumb(items, afterName = false) {
   const list = el("ol", { className: "breadcrumb-list" });
   items.forEach((it, i) => {
     const last = i === items.length - 1;
-    list.append(el("li", { className: "breadcrumb-item" },
-      last
-        ? el("span", { className: "breadcrumb-page", role: "link", textContent: it.label })
-        : el("a", { className: "breadcrumb-link", href: it.href, textContent: it.label })));
-    if (!last) {
-      const sep = el("li", { className: "breadcrumb-separator", role: "presentation" }, icon("chevronRight"));
+    const item = el("li", { className: "breadcrumb-item" });
+    if (i > 0 || afterName) { // a chevron before a crumb, inside it: the name (if it stands before) and the crumbs read as one line
+      const sep = el("span", { className: "breadcrumb-separator", role: "presentation" }, icon("chevronRight"));
       sep.setAttribute("aria-hidden", "true");
-      list.append(sep);
+      item.append(sep);
     }
+    item.append(last
+      ? el("span", { className: "breadcrumb-page", role: "link", textContent: it.label })
+      : el("a", { className: "breadcrumb-link", href: it.href, textContent: it.label }));
+    list.append(item);
   });
   return list;
 }
@@ -938,20 +944,16 @@ function show(meta, schema) {
   $("desc").textContent = key ? "" : (meta.description || "").trim(); // on a group's page the description sits under its heading
   document.title = [...titles.slice(-1), meta.name, "tunables"].join(" · ");
 
-  // the header: the name on the main page; Back and breadcrumbs on the page of a group
+  // the header: the name on the main page; the name, then the breadcrumbs on the page of a group
   $("name").textContent = meta.name;
   $("heroName").textContent = meta.name;
   $("hero").hidden = !!key; // the name and the description are the top of the main page only
-  $("name").hidden = !!key;
-  $("back").hidden = !key;
-  if (key) $("back").href = "#" + (key.includes(".") ? "/" + encodeURIComponent(key.slice(0, key.lastIndexOf("."))) : ""); // up one level
   $("crumbs").hidden = !key;
   if (key) {
-    $("crumbs").replaceChildren(Breadcrumb([
-      { label: meta.name, href: "#" },
+    $("crumbs").replaceChildren(Breadcrumb([ // the name before them is the first crumb, a link to the main page
       ...titles.slice(0, -1).map((label, i) => ({ label, href: "#/" + encodeURIComponent(parts.slice(0, i + 1).join(".")) })),
       { label: titles[titles.length - 1] },
-    ]));
+    ], true));
   }
 
   const sig = JSON.stringify([key, schema.groups, schema.fields.map((f) => [f.key, f.name, f.type, f.ui, f.enum, f.min, f.max, f.desc])]);
@@ -975,7 +977,8 @@ function show(meta, schema) {
 // its line and the name (a group's page has no hero: it gets them as soon as the page is scrolled).
 function updateNavbar() {
   const bar = $("bar");
-  const stuck = $("hero").hidden ? scrollY > 8 : $("heroName").getBoundingClientRect().bottom <= bar.offsetHeight;
+  // a group's page has no title block: its navbar (the name, Save) is always drawn; on the main page it appears when the title has scrolled under it
+  const stuck = $("hero").hidden || $("heroName").getBoundingClientRect().bottom <= bar.offsetHeight;
   bar.classList.toggle("stuck", stuck);
 }
 
@@ -990,8 +993,6 @@ async function load() {
   }
 }
 
-const back = el("a", { id: "back", className: "btn btn-link size-default", title: "Back", hidden: true }, icon("arrowLeft"), el("span", { textContent: "Back" }));
-document.querySelector(".title").prepend(back);
 addEventListener("hashchange", () => { scrollTo(0, 0); if (lastData) show(lastData.meta, lastData.schema); });
 let scrollFrame = 0;
 addEventListener("scroll", () => { cancelAnimationFrame(scrollFrame); scrollFrame = requestAnimationFrame(updateNavbar); }, { passive: true });

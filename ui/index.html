@@ -77,7 +77,9 @@ button,input,textarea{font-family:inherit}
 .group-toggle.group-share-button{width:auto;min-width:28px;gap:4px;padding:0 6px;margin-left:auto;font-size:12px;font-weight:500}
 .group-toggle.group-share-button.set{color:hsl(var(--foreground))}
 .group-toggle.group-share-button+.group-remove{margin-left:0}
-.group-share:empty{display:none}
+.group-toggle.group-share-button+.group-switch{margin-left:8px}
+.share-ring{width:16px;height:16px;flex:none}
+.group-share-button.set svg:last-child{width:14px;height:14px}
 .group-remove+.group-toggle{margin-left:0}
 .group.target-group{margin:0 0 12px;padding:14px 20px 16px;border:1px solid hsl(var(--border));border-radius:var(--radius)}
 .group.target-group>.group-head{margin-bottom:4px}
@@ -359,6 +361,8 @@ const ICON = {
   luCheck: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>',
   luRotateCcw: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>',
   sliders: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></svg>',
+  hash: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/></svg>',
+  shuffle: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"/><path d="m18 14 4 4-4 4"/></svg>',
   luX: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
   plus: '<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>',
   minus: '<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"></line></svg>',
@@ -1343,7 +1347,7 @@ function renderGroup(node, level, name, inFeature = false, flat = false) {
     const removes = meta.rule && inFeature || meta.targetGroup;
     const remove = removes ? el("button", { type: "button", className: "group-toggle group-remove", ariaLabel: "Remove " + title, title: meta.targetGroup ? "Remove the group" : "Remove" }, icon("luX")) : null;
     if (remove) remove.onclick = () => (meta.targetGroup ? removeGroup(groupSetsOf().find((g) => g.key === meta.setKey), meta.groupId) : removeRule(node));
-    const traffic = meta.targetGroup ? trafficButton(node) : null;
+    const traffic = meta.targetGroup ? trafficButton(node) : meta.feature ? featureTraffic(node) : null;
     const enabled = meta.feature ? powerSwitch(node, title) : null;
     const power = enabled && enabled.power;
     // a group of a feature is a card: no dots before its name; the rules in it have one, the card is their parent
@@ -1376,10 +1380,6 @@ function appendChildren(parent, node, level, meta, flat = false) {
   if (meta.targetGroup) { // under the rules, always: the share of the traffic, then the button that adds a rule
     const add = featureAdd(node);
     if (add) parent.append(add);
-    if (flat) { // the one group has no heading to hold its button: it goes with the others, under the rules
-      const row = add || parent.appendChild(el("div", { className: "feature-add" }));
-      row.append(trafficButton(node, true));
-    }
   }
 }
 
@@ -1413,7 +1413,7 @@ function expand(schema) {
       const base = gs.key + "." + it.id;
       groups.push({ key: base, name: it.name || groupLetters(i + 1), targetGroup: true, setKey: gs.key, groupId: it.id });
       fields.push({ key: base + ".name", type: "string", ui: "input", name: "Name", value: it.name, default: "", modified: false });
-      fields.push({ key: base + ".percent", type: "int", ui: "slider", name: "Traffic, %", min: 0, max: 100, value: it.percent ?? 100, default: 100, modified: false });
+      fields.push({ key: base + ".percent", type: "int", ui: "slider", name: "Percent", min: 0, max: 100, value: it.percent ?? 100, default: 100, modified: false });
       fields.push({ key: base + ".split", type: "string", ui: "buttons", enum: ["murmurhash", "random"], name: "Split by", value: it.random ? "random" : "murmurhash", default: "murmurhash", modified: false });
       for (const f of gs.fields) fields.push({ ...f, key: base + "." + f.key, value: f.key in it.values ? it.values[f.key] : f.value, modified: false });
       for (const g of gs.groups) groups.push({ ...g, key: base + "." + g.key });
@@ -1479,18 +1479,32 @@ function removeGroup(gs, id) {
 const fieldOf = (node, name) => node.rows.find((x) => x.name === name);
 const valueOf = (r) => (pending.has(r.f.key) ? pending.get(r.f.key) : r.f.value);
 
-function trafficButton(node, labeled = false) {
+// the button of a feature that has one group: that group has no heading, so it is by the switch of the feature
+function featureTraffic(feature) {
+  const list = [...feature.groups.values()].find((c) => (groupMeta.get(c.key) || {}).groupList);
+  const groups = list ? [...list.groups].filter(([name]) => name !== "#list") : [];
+  return groups.length === 1 ? trafficButton(groups[0][1]) : null;
+}
+
+function trafficButton(node) {
   const share = () => {
     const p = fieldOf(node, "percent");
     return p ? valueOf(p) : 100;
   };
-  const text = el("span", { className: "group-share" });
-  const button = labeled
-    ? Button({ variant: "outline", size: "sm", className: "feature-add-button", type: "button", title: "Traffic" }, icon("sliders"), text)
-    : el("button", { type: "button", className: "group-toggle group-share-button", ariaLabel: "Traffic of the group", title: "Traffic" }, icon("sliders"), text);
+  const button = el("button", { type: "button", className: "group-toggle group-share-button", ariaLabel: "Traffic", title: "Traffic" });
+  // nothing is set: the settings icon; a share: a ring filled by it, the number, and how it is cut (a hash, or dice)
   const update = () => {
-    text.textContent = share() < 100 ? share() + "%" : labeled ? "Traffic" : "";
-    button.classList.toggle("set", share() < 100);
+    const p = share();
+    const random = fieldOf(node, "split") && valueOf(fieldOf(node, "split")) === "random";
+    button.classList.toggle("set", p < 100);
+    button.title = button.ariaLabel = p < 100 ? "Traffic: " + p + "%, " + (random ? "random" : "murmurhash") : "Traffic";
+    if (p >= 100) return button.replaceChildren(icon("sliders"));
+    const ring = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    ring.setAttribute("viewBox", "0 0 20 20");
+    ring.classList.add("share-ring");
+    const arc = 2 * Math.PI * 7;
+    ring.innerHTML = '<circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-opacity=".25" stroke-width="3"/><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="3" transform="rotate(-90 10 10)" stroke-dasharray="' + (arc * p) / 100 + " " + arc + '"/>';
+    button.replaceChildren(ring, el("span", { className: "group-share", textContent: p + "%" }), icon(random ? "shuffle" : "hash"));
   };
   update();
   button.onclick = () => openPanel({ title: "Traffic", opener: button, rows: node.rows.filter((x) => x.name === "percent" || x.name === "split"), node, onClose: update });
@@ -1703,7 +1717,8 @@ function renderPage(node, ancestors) {
   // the title of the page: the group's own heading (the breadcrumbs above only say where it is)
   const section = el("section", { className: "group level-" + Math.min(depth, 3) });
   const enabled = meta.feature ? powerSwitch(node, ancestors[depth - 1]) : null;
-  const head = el("div", { className: "group-head" }, el("h" + Math.min(depth + 1, 4), { className: "heading" }, ...depthMarker(depth), el("span", { textContent: ancestors[depth - 1] }), ...(enabled ? [enabled.power] : [])));
+  const traffic = meta.feature ? featureTraffic(node) : null;
+  const head = el("div", { className: "group-head" }, el("h" + Math.min(depth + 1, 4), { className: "heading" }, ...depthMarker(depth), el("span", { textContent: ancestors[depth - 1] }), ...(traffic ? [traffic] : []), ...(enabled ? [enabled.power] : [])));
   if (meta.desc) head.append(el("p", { textContent: meta.desc }));
   if (enabled) head.append(...enabled.messages);
   section.append(head);

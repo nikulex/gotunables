@@ -3,7 +3,7 @@ module github.com/nikulex/gotunables/metrics/prom
 go 1.24.0
 
 require (
-	github.com/nikulex/gotunables v0.7.0
+	github.com/nikulex/gotunables v0.8.0
 	github.com/prometheus/client_golang v1.11.1
 )
 

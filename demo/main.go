@@ -95,7 +95,7 @@ func main() {
 func people() tunables.DataSource[int] {
 	const base = "https://dummyjson.com/users"
 	client := &http.Client{Timeout: 4 * time.Second}
-	fetch := func(ctx context.Context, u string) ([]tunables.Item[int], error) {
+	fetchRaw := func(ctx context.Context, u string) ([]tunables.Item[int], error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 		if err != nil {
 			return nil, err
@@ -125,6 +125,29 @@ func people() tunables.DataSource[int] {
 		}
 		return items, nil
 	}
+	// the test API limits how often it is asked (429): an answer is kept for a minute
+	type cached struct {
+		at    time.Time
+		items []tunables.Item[int]
+	}
+	var cacheMu sync.Mutex
+	cache := map[string]cached{}
+	fetch := func(ctx context.Context, u string) ([]tunables.Item[int], error) {
+		cacheMu.Lock()
+		hit, ok := cache[u]
+		cacheMu.Unlock()
+		if ok && time.Since(hit.at) < time.Minute {
+			return hit.items, nil
+		}
+		items, err := fetchRaw(ctx, u)
+		if err != nil {
+			return nil, err
+		}
+		cacheMu.Lock()
+		cache[u] = cached{at: time.Now(), items: items}
+		cacheMu.Unlock()
+		return items, nil
+	}
 	const fields = "&select=id,firstName,lastName,image"
 
 	var (
@@ -132,11 +155,11 @@ func people() tunables.DataSource[int] {
 		all map[int]tunables.Item[int]
 	)
 	return tunables.DataSource[int]{
-		Search: func(ctx context.Context, query string, limit int) ([]tunables.Item[int], error) {
+		Search: func(ctx context.Context, query string, limit, offset int) ([]tunables.Item[int], error) {
 			if query == "" {
-				return fetch(ctx, fmt.Sprintf("%s?limit=%d%s", base, limit, fields))
+				return fetch(ctx, fmt.Sprintf("%s?limit=%d&skip=%d%s", base, limit, offset, fields))
 			}
-			return fetch(ctx, fmt.Sprintf("%s/search?q=%s&limit=%d%s", base, url.QueryEscape(query), limit, fields))
+			return fetch(ctx, fmt.Sprintf("%s/search?q=%s&limit=%d&skip=%d%s", base, url.QueryEscape(query), limit, offset, fields))
 		},
 		Get: func(ctx context.Context, ids []int) ([]tunables.Item[int], error) {
 			mu.Lock()

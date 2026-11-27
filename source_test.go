@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -24,14 +25,15 @@ var testUsers = map[uint]string{1: "Ann", 2: "Bob", 3: "Annie", 4: "Carl"}
 
 func usersSource() Option {
 	return WithSource("users", DataSource[uint]{
-		Search: func(_ context.Context, q string, limit int) ([]Item[uint], error) {
+		Search: func(_ context.Context, q string, limit, offset int) ([]Item[uint], error) {
 			var out []Item[uint]
 			for id := uint(1); id <= 4; id++ {
 				if strings.Contains(strings.ToLower(testUsers[id]), strings.ToLower(q)) {
 					out = append(out, Item[uint]{ID: id, Name: testUsers[id], ImageSrc: "https://img.example/" + testUsers[id] + ".png"})
 				}
 			}
-			return out, nil
+			out = out[min(offset, len(out)):]
+			return out[:min(limit, len(out))], nil
 		},
 		Get: func(_ context.Context, ids []uint) ([]Item[uint], error) {
 			var out []Item[uint]
@@ -47,7 +49,7 @@ func usersSource() Option {
 
 func chatsSource() Option {
 	return WithSource("chats", DataSource[int64]{
-		Search: func(context.Context, string, int) ([]Item[int64], error) {
+		Search: func(context.Context, string, int, int) ([]Item[int64], error) {
 			return []Item[int64]{{ID: -100, Name: "Dev chat"}}, nil
 		},
 		Get: func(_ context.Context, ids []int64) ([]Item[int64], error) {
@@ -64,7 +66,7 @@ func chatsSource() Option {
 
 func codesSource() Option {
 	return WithSource("codes", DataSource[string]{
-		Search: func(context.Context, string, int) ([]Item[string], error) {
+		Search: func(context.Context, string, int, int) ([]Item[string], error) {
 			return []Item[string]{{ID: "a1", Name: "A one"}}, nil
 		},
 		Get: func(_ context.Context, ids []string) ([]Item[string], error) {
@@ -169,7 +171,7 @@ func TestSourceFailureOnWriteIsNotTakenForABadValue(t *testing.T) {
 	tn, err := New(struct {
 		Who *uint `json:"who" tune:"source:users"`
 	}{}, WithSource("users", DataSource[uint]{
-		Search: func(context.Context, string, int) ([]Item[uint], error) { return nil, nil },
+		Search: func(context.Context, string, int, int) ([]Item[uint], error) { return nil, nil },
 		Get: func(context.Context, []uint) ([]Item[uint], error) {
 			return nil, errors.New("db is down: password=secret")
 		},
@@ -293,7 +295,7 @@ func TestSourceSearchGetsTheQueryAndALimitInRange(t *testing.T) {
 	tn, err := New(struct {
 		Who *uint `json:"who" tune:"source:s"`
 	}{}, WithSource("s", DataSource[uint]{
-		Search: func(_ context.Context, q string, limit int) ([]Item[uint], error) {
+		Search: func(_ context.Context, q string, limit, _ int) ([]Item[uint], error) {
 			gotQ, gotLimit = q, limit
 			out := make([]Item[uint], 500) // a source that ignores the limit
 			for i := range out {
@@ -311,7 +313,7 @@ func TestSourceSearchGetsTheQueryAndALimitInRange(t *testing.T) {
 		w := do(h, "GET", path, "", nil)
 		var r struct{ Items []any }
 		_ = json.Unmarshal(w.Body.Bytes(), &r)
-		if gotLimit != want || len(r.Items) != want {
+		if gotLimit != want+1 || len(r.Items) != want { // the source is asked for one more than the page: that tells whether there is a next one
 			t.Errorf("%s: the source got %d, the page got %d, want %d", path, gotLimit, len(r.Items), want)
 		}
 	}
@@ -325,7 +327,7 @@ func TestSourceErrorsAreNotShownToThePage(t *testing.T) {
 	tn, err := New(struct {
 		Who *uint `json:"who" tune:"source:s"`
 	}{}, WithSource("s", DataSource[uint]{
-		Search: func(context.Context, string, int) ([]Item[uint], error) {
+		Search: func(context.Context, string, int, int) ([]Item[uint], error) {
 			return nil, errors.New("dial tcp 10.0.0.5: password=secret")
 		},
 		Get: func(context.Context, []uint) ([]Item[uint], error) {
@@ -413,7 +415,7 @@ func TestSourceResetGoesBackToTheDefault(t *testing.T) {
 
 func TestBadSources(t *testing.T) {
 	ok := WithSource("users", DataSource[uint]{
-		Search: func(context.Context, string, int) ([]Item[uint], error) { return nil, nil },
+		Search: func(context.Context, string, int, int) ([]Item[uint], error) { return nil, nil },
 		Get:    func(context.Context, []uint) ([]Item[uint], error) { return nil, nil },
 	})
 	type one struct {
@@ -480,7 +482,7 @@ func TestBadSources(t *testing.T) {
 		}, "is not a setting"},
 		"twice": {func() error { _, err := New(one{}, ok, ok); return err }, "registered twice"},
 		"no Get": {func() error {
-			_, err := New(one{}, WithSource("users", DataSource[uint]{Search: func(context.Context, string, int) ([]Item[uint], error) { return nil, nil }}))
+			_, err := New(one{}, WithSource("users", DataSource[uint]{Search: func(context.Context, string, int, int) ([]Item[uint], error) { return nil, nil }}))
 			return err
 		}, "needs both Search and Get"},
 		"a bad name": {func() error {
@@ -489,7 +491,7 @@ func TestBadSources(t *testing.T) {
 		}, "the name must be"},
 		"an id that is not an id": {func() error {
 			_, err := New(one{}, WithSource("x", DataSource[float64]{
-				Search: func(context.Context, string, int) ([]Item[float64], error) { return nil, nil },
+				Search: func(context.Context, string, int, int) ([]Item[float64], error) { return nil, nil },
 				Get:    func(context.Context, []float64) ([]Item[float64], error) { return nil, nil },
 			}))
 			return err
@@ -502,5 +504,81 @@ func TestBadSources(t *testing.T) {
 	// an unused source is fine
 	if _, err := New(struct{ A bool }{}, ok); err != nil {
 		t.Error(err)
+	}
+}
+
+func TestSourceSearchPagesAndSaysWhetherThereIsMore(t *testing.T) {
+	var gotOffset int
+	var total = 7
+	tn, err := New(struct {
+		Who *uint `json:"who" tune:"source:s"`
+	}{}, WithSource("s", DataSource[uint]{
+		Search: func(_ context.Context, _ string, limit, offset int) ([]Item[uint], error) {
+			gotOffset = offset
+			var out []Item[uint]
+			for i := offset; i < min(offset+limit, total); i++ {
+				out = append(out, Item[uint]{ID: uint(i + 1), Name: "n"})
+			}
+			return out, nil
+		},
+		Get: func(context.Context, []uint) ([]Item[uint], error) { return nil, nil },
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := tn.Handler()
+	type page struct {
+		Items []struct{ ID uint }
+		More  bool
+	}
+	read := func(path string) page {
+		w := do(h, "GET", path, "", nil)
+		var p page
+		if err := json.Unmarshal(w.Body.Bytes(), &p); err != nil || w.Code != 200 {
+			t.Fatalf("%s: %d %v %s", path, w.Code, err, w.Body)
+		}
+		return p
+	}
+	// 7 entries, 3 to a page: 3 + 3 + 1, and only the last one has no next
+	var seen []uint
+	for offset, pages := 0, 0; ; pages++ {
+		p := read("/sources/s/search?limit=3&offset=" + strconv.Itoa(offset))
+		if gotOffset != offset {
+			t.Errorf("the source got offset %d, want %d", gotOffset, offset)
+		}
+		for _, it := range p.Items {
+			seen = append(seen, it.ID)
+		}
+		offset += len(p.Items)
+		if !p.More {
+			if pages != 2 {
+				t.Errorf("the last page came after %d pages, want 3", pages+1)
+			}
+			break
+		}
+		if pages > 5 {
+			t.Fatal("it does not end")
+		}
+	}
+	if !slices.Equal(seen, []uint{1, 2, 3, 4, 5, 6, 7}) {
+		t.Errorf("seen %v", seen)
+	}
+	// a page that ends exactly where the data does has no next one
+	total = 6
+	if p := read("/sources/s/search?limit=3&offset=3"); len(p.Items) != 3 || p.More {
+		t.Errorf("an exact last page: %+v", p)
+	}
+	// the offset is kept in range
+	read("/sources/s/search?offset=-4")
+	if gotOffset != 0 {
+		t.Errorf("a negative offset is 0, the source got %d", gotOffset)
+	}
+	read("/sources/s/search?offset=99999999")
+	if gotOffset != sourceMaxOffset {
+		t.Errorf("a huge offset is cut to %d, the source got %d", sourceMaxOffset, gotOffset)
+	}
+	read("/sources/s/search?offset=abc")
+	if gotOffset != 0 {
+		t.Errorf("a bad offset is 0, the source got %d", gotOffset)
 	}
 }

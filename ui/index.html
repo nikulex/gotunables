@@ -112,6 +112,7 @@ button,input,textarea{font-family:inherit}
 .pick-check svg{width:16px;height:16px}
 .pick-note{padding:10px 8px;font-size:14px;line-height:20px;color:hsl(var(--muted-foreground))}
 .pick-note.error{color:hsl(var(--destructive))}
+.pick-retry{cursor:pointer}
 
 /* ---- Counter: the quantity control of the shop (plus | input | minus), joined ---- */
 .counter{display:flex;flex:none;justify-content:space-between}
@@ -551,7 +552,7 @@ function Duration({ min, max, onChange }) {
   };
 }
 
-// A list or a set: its items as removable chips, and a control of the item's own type to add one.
+// A list or a set: a control of the item's own type to add one, and under it the items as removable chips.
 function Chips(f, onChange) {
   const isSet = f.type === "set";
   const prec = f.precision;
@@ -633,7 +634,7 @@ function Chips(f, onChange) {
   add_.onclick = submit;
   if (focusable) focusable.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } });
 
-  const root = el("div", { className: "chips-box" }, chips, el("div", { className: "adder" }, control, add_));
+  const root = el("div", { className: "chips-box" }, el("div", { className: "adder" }, control, add_), chips); // the input on top, the list under it
   render();
   return { el: root, set(v) { items = isSet ? [...v].sort(order) : [...v]; render(); } };
 }
@@ -642,6 +643,9 @@ function Chips(f, onChange) {
 // setting keeps only ids (a set or a list of them, or one that may be null); the names and pictures are asked of the
 // source: /items for the chosen ones, /search for the list.
 const entries = new Map(); // "source id" -> {id, name, image}, what the source said, kept for the chips
+const pageCache = new Map(); // a page of a search -> {at, data}: opening the list again or typing the same thing asks the source nothing
+const PAGE_TTL = 30000;
+const PAGE_CACHE_MAX = 100;
 const entryKey = (source, id) => source + "\u0000" + id;
 const safeImage = (src) => (/^(https:\/\/|data:image\/)/i.test(src || "") ? src : "");
 
@@ -669,7 +673,7 @@ function Picker(f, onChange) {
   input.setAttribute("role", "combobox");
   input.setAttribute("aria-autocomplete", "list");
   input.setAttribute("aria-expanded", "false");
-  const root = el("div", { className: "picker" }, chips, input);
+  const root = el("div", { className: "picker" }, input, chips); // the input on top, the list of the chosen under it
 
   function render() {
     chips.replaceChildren();
@@ -712,8 +716,12 @@ function Picker(f, onChange) {
   // ---- the list under the input ----
   let menu = null;
   let results = [];
+  let query = "";
   let state = "idle"; // idle | loading | error
   let active = -1;
+  let more = false;     // the source has entries after the ones listed: they are read as the list is scrolled to its end
+  let paging = false;   // the next page is on its way
+  let pageError = false;
   let pointer = { x: -1, y: -1 };
   let timer = 0;
   let ctrl = null;
@@ -755,8 +763,16 @@ function Picker(f, onChange) {
     });
     if (state === "error") view.append(el("div", { className: "pick-note error", textContent: "Could not search the source" }));
     else if (results.length === 0) view.append(el("div", { className: "pick-note", textContent: state === "loading" ? "Searching…" : "Nothing found" }));
+    else if (pageError) {
+      const retry = el("div", { className: "pick-note error pick-retry", textContent: "Could not load more. Click to try again" });
+      retry.onpointerdown = (ev) => ev.preventDefault();
+      retry.onclick = () => { pageError = false; loadMore(); };
+      view.append(retry);
+    } else if (paging) view.append(el("div", { className: "pick-note", textContent: "Loading…" }));
     if (active >= 0) input.setAttribute("aria-activedescendant", "pick-" + f.key + "-" + active); else input.removeAttribute("aria-activedescendant");
     place();
+    // a page that does not fill the list leaves nothing to scroll: the next one is read without waiting for it
+    if (more && !paging && !pageError && state === "idle" && menu.scrollHeight <= menu.clientHeight + 48) loadMore();
   }
 
   function search(delay) {
@@ -765,15 +781,21 @@ function Picker(f, onChange) {
       ctrl?.abort(); // an answer to what was typed before is of no use any more
       ctrl = new AbortController();
       const mine = ++seq;
+      query = input.value.trim();
       state = "loading";
+      paging = false;
+      pageError = false;
+      more = false;
       renderMenu();
       try {
-        const data = await api("GET", "sources/" + encodeURIComponent(f.source) + "/search?limit=20&q=" + encodeURIComponent(input.value.trim()), undefined, ctrl.signal);
+        const data = await fetchPage(0);
         if (mine !== seq) return;
         results = data.items;
+        more = !!data.more;
         results.forEach((e) => entries.set(entryKey(f.source, e.id), e));
         state = "idle";
         active = results.length ? 0 : -1;
+        if (menu) menu.scrollTop = 0;
       } catch (e) {
         if (e.name === "AbortError" || e instanceof AuthError || mine !== seq) return;
         results = [];
@@ -783,12 +805,48 @@ function Picker(f, onChange) {
     }, delay);
   }
 
+  const searchPath = (offset) => "sources/" + encodeURIComponent(f.source) + "/search?limit=20&offset=" + offset + "&q=" + encodeURIComponent(query);
+  // a page of the search: from the cache while it is fresh, else from the source (which may limit how often it is asked)
+  async function fetchPage(offset) {
+    const path = searchPath(offset);
+    const hit = pageCache.get(path);
+    if (hit && Date.now() - hit.at < PAGE_TTL) return hit.data;
+    const data = await api("GET", path, undefined, ctrl.signal);
+    pageCache.delete(path);
+    pageCache.set(path, { at: Date.now(), data });
+    if (pageCache.size > PAGE_CACHE_MAX) pageCache.delete(pageCache.keys().next().value); // the oldest goes
+    return data;
+  }
+
+  // the next page of the same search, when the list is scrolled to its end
+  async function loadMore() {
+    if (!menu || !more || paging || pageError || state !== "idle") return;
+    const mine = seq;
+    paging = true;
+    renderMenu();
+    try {
+      const data = await fetchPage(results.length);
+      if (mine !== seq) return; // another search has begun: it has reset these
+      const have = new Set(results.map((e) => e.id));
+      const fresh = data.items.filter((e) => !have.has(e.id)); // a source that changed meanwhile may repeat one
+      fresh.forEach((e) => entries.set(entryKey(f.source, e.id), e));
+      results = results.concat(fresh);
+      more = !!data.more && fresh.length > 0;
+    } catch (e) {
+      if (e.name === "AbortError" || e instanceof AuthError || mine !== seq) return;
+      pageError = true;
+    }
+    paging = false;
+    renderMenu();
+  }
+
   const outside = (e) => { if (menu && !menu.contains(e.target) && e.target !== input) close(); };
   const onScroll = (e) => { if (menu && !menu.contains(e.target)) close(); };
   function open() {
     if (menu || input.disabled) return;
     menu = el("div", { className: "select-content", role: "listbox" }, el("div", { className: "select-viewport" }));
     document.body.append(menu);
+    menu.addEventListener("scroll", () => { if (menu.scrollTop + menu.clientHeight >= menu.scrollHeight - 48) loadMore(); });
     input.setAttribute("aria-expanded", "true");
     document.addEventListener("pointerdown", outside, true);
     addEventListener("resize", close);
@@ -806,6 +864,7 @@ function Picker(f, onChange) {
     results = [];
     state = "idle";
     active = -1;
+    more = paging = pageError = false;
     input.setAttribute("aria-expanded", "false");
     input.removeAttribute("aria-activedescendant");
     document.removeEventListener("pointerdown", outside, true);
@@ -834,6 +893,7 @@ function Picker(f, onChange) {
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       if (!menu) return open();
+      if (e.key === "ArrowDown" && active === results.length - 1 && more) return loadMore(); // the end of what is read: the next page, not the top
       if (results.length) { active = (active + (e.key === "ArrowDown" ? 1 : -1) + results.length) % results.length; renderMenu(); menu.querySelector(".active")?.scrollIntoView({ block: "nearest" }); }
     } else if (e.key === "Enter") {
       if (menu && active >= 0 && results[active]) { e.preventDefault(); choose(results[active]); }

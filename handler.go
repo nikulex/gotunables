@@ -24,7 +24,7 @@ const protocol = 1
 //	GET    /schema        {fields: [{key, type, desc, default, value, modified, enum, min, max}]}
 //	PUT    /values/{key}  {"value": ...}  -> the updated field
 //	DELETE /values/{key}  back to the default -> the updated field
-//	GET    /sources/{name}/search?q=&limit=  the entries of a data source that match -> {items: [{id, name, image}]}
+//	GET    /sources/{name}/search?q=&limit=&offset=  the entries of a data source that match -> {items: [{id, name, image}], more}
 //	GET    /sources/{name}/items?id=&id=     the entries of these ids -> {items: [...]} (the ones that exist)
 //
 // Mount it under a prefix with http.StripPrefix and a trailing slash:
@@ -246,21 +246,28 @@ func (c *core) handleSourceSearch(w http.ResponseWriter, r *http.Request) {
 	if rs := []rune(q); len(rs) > sourceMaxQuery {
 		q = string(rs[:sourceMaxQuery])
 	}
-	limit := sourceDefLimit
+	limit, offset := sourceDefLimit, 0
 	if s := r.URL.Query().Get("limit"); s != "" {
 		if n, err := strconv.Atoi(s); err == nil {
 			limit = min(max(n, 1), sourceMaxLimit)
 		}
 	}
+	if s := r.URL.Query().Get("offset"); s != "" {
+		if n, err := strconv.Atoi(s); err == nil {
+			offset = min(max(n, 0), sourceMaxOffset)
+		}
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), sourceTimeout)
 	defer cancel()
-	items, err := src.search(ctx, q, limit)
+	// one more than the page: that is how it is known whether there is a next one
+	items, err := src.search(ctx, q, limit+1, offset)
 	if err != nil {
 		c.opts.log.Error("tunables: source search failed", "source", src.name, "error", err)
 		c.writeError(w, http.StatusBadGateway, "the source did not answer")
 		return
 	}
-	c.writeJSON(w, http.StatusOK, map[string]any{"items": cut(items, limit)})
+	more := len(items) > limit
+	c.writeJSON(w, http.StatusOK, map[string]any{"items": cut(items, limit), "more": more})
 }
 
 // handleSourceItems finds the entries of the ids a setting holds, to show them by name and picture.

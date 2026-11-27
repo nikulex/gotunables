@@ -33,10 +33,12 @@ type Item[ID comparable] struct {
 //
 // The id type of the source is the type of the setting (or of an item of it): int, uint or string, of any size.
 type DataSource[ID comparable] struct {
-	// Search finds the entries that match what was typed, at most limit of them. An empty query is asked for too (the
-	// list that opens first): return the most useful ones. Make it quick and cheap: the page calls it as someone types
-	// (after a pause), and every call is cut off after 5 seconds.
-	Search func(ctx context.Context, query string, limit int) ([]Item[ID], error)
+	// Search finds the entries that match what was typed: at most limit of them, after the first offset ones, in the same
+	// order every time (the list is read page by page as it is scrolled, so a page has to follow the one before it). An
+	// empty query is asked for too (the list that opens first): return the most useful ones. Make it quick and cheap:
+	// the page calls it as someone types (after a pause) and as the list is scrolled, and every call is cut off after
+	// 5 seconds.
+	Search func(ctx context.Context, query string, limit, offset int) ([]Item[ID], error)
 	// Get returns the entries of these ids; an id that does not exist is just left out. The page uses it to show the chosen
 	// values, and a change is refused if one of its ids is not found.
 	Get func(ctx context.Context, ids []ID) ([]Item[ID], error)
@@ -73,8 +75,8 @@ func WithSource[ID comparable](name string, ds DataSource[ID]) Option {
 		o.sources = append(o.sources, &source{
 			name:   name,
 			idType: idType,
-			search: func(ctx context.Context, query string, limit int) ([]sourceItem, error) {
-				items, err := ds.Search(ctx, query, limit)
+			search: func(ctx context.Context, query string, limit, offset int) ([]sourceItem, error) {
+				items, err := ds.Search(ctx, query, limit, offset)
 				return erase(items), err
 			},
 			get: func(ctx context.Context, ids []any) ([]sourceItem, error) {
@@ -95,6 +97,7 @@ const (
 	sourceTimeout    = 5 * time.Second
 	sourceMaxQuery   = 100 // characters of a query
 	sourceMaxLimit   = 50
+	sourceMaxOffset  = 10000 // how deep the list is scrolled: further than this, type more of the name
 	sourceDefLimit   = 20
 	sourceMaxItemIDs = 100 // ids of one /items request
 )
@@ -110,7 +113,7 @@ type sourceItem struct {
 type source struct {
 	name   string
 	idType reflect.Type
-	search func(ctx context.Context, query string, limit int) ([]sourceItem, error)
+	search func(ctx context.Context, query string, limit, offset int) ([]sourceItem, error)
 	get    func(ctx context.Context, ids []any) ([]sourceItem, error) // the ids are of idType
 }
 

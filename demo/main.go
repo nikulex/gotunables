@@ -45,6 +45,7 @@ type Features struct {
 	People struct {
 		Owner     *int              `json:"owner" tune:"source:people; desc:One person, or nobody"`
 		Reviewers tunables.Set[int] `json:"reviewers" tune:"source:people; desc:Any number of people; maxlen:6; default:1,3"`
+		Cursor    *int              `json:"cursor" tune:"source:people-cursor; desc:The same people, read by a token (a cursor) instead of an offset: how an API that has no offset is paged"`
 		Rotation  []int             `json:"rotation" tune:"source:people; custom:true; desc:The same person may come twice, the order matters. An id that is not in the list can be added too"`
 	} `json:"people" tune:"name:People; desc:Picked from a data source: the users of dummyjson.com"`
 
@@ -102,6 +103,7 @@ func main() {
 		tunables.WithName(name),
 		tunables.WithDescription(description),
 		tunables.WithSource("people", people()),
+		tunables.WithSource("people-cursor", byToken(people())),
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -151,6 +153,33 @@ func main() {
 	})
 	log.Println("settings UI: http://127.0.0.1:6767/")
 	log.Fatal(http.ListenAndServe("127.0.0.1:6767", mux))
+}
+
+// byToken reads a source that takes an offset as one that takes a token, as an API that has no offset would be: the token is an
+// opaque text (here it holds the place to go on from, which is all a cursor is) and the page after it is known by the entry that
+// is one more than the page.
+func byToken(ds tunables.DataSource[int]) tunables.DataSource[int] {
+	return tunables.DataSource[int]{
+		SearchToken: func(ctx context.Context, query string, limit int, token string) (tunables.Page[int], error) {
+			from := 0
+			if token != "" {
+				var err error
+				if from, err = strconv.Atoi(strings.TrimPrefix(token, "cursor-")); err != nil {
+					return tunables.Page[int]{}, fmt.Errorf("a token that was not given: %w", err)
+				}
+			}
+			items, err := ds.Search(ctx, query, limit+1, from)
+			if err != nil {
+				return tunables.Page[int]{}, err
+			}
+			p := tunables.Page[int]{Items: items[:min(limit, len(items))]}
+			if len(items) > limit {
+				p.Next = "cursor-" + strconv.Itoa(from+limit)
+			}
+			return p, nil
+		},
+		Get: ds.Get,
+	}
 }
 
 // people is a data source over a public test API (https://dummyjson.com/users: 208 made-up users with pictures).

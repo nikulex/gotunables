@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -486,7 +487,19 @@ func TestBadSources(t *testing.T) {
 		"no Get": {func() error {
 			_, err := New(one{}, WithSource("users", DataSource[uint]{Search: func(context.Context, string, int, int) ([]Item[uint], error) { return nil, nil }}))
 			return err
-		}, "needs both Search and Get"},
+		}, "needs Get"},
+		"no way to search": {func() error {
+			_, err := New(one{}, WithSource("users", DataSource[uint]{Get: func(context.Context, []uint) ([]Item[uint], error) { return nil, nil }}))
+			return err
+		}, "needs one of Search"},
+		"two ways to search": {func() error {
+			_, err := New(one{}, WithSource("users", DataSource[uint]{
+				Search:      func(context.Context, string, int, int) ([]Item[uint], error) { return nil, nil },
+				SearchToken: func(context.Context, string, int, string) (Page[uint], error) { return Page[uint]{}, nil },
+				Get:         func(context.Context, []uint) ([]Item[uint], error) { return nil, nil },
+			}))
+			return err
+		}, "needs one of Search"},
 		"a bad name": {func() error {
 			_, err := New(one{}, WithSource("a/b", DataSource[uint]{}))
 			return err
@@ -659,4 +672,134 @@ func TestSourceCustomNeedsASource(t *testing.T) {
 	}{}, usersSource()); err != nil {
 		t.Error(err)
 	}
+}
+
+// tokenSource is a list of n entries that is read by a token: the token is the place to go on from, as an API would give it.
+func tokenSource(n int, asked *[]string) Option {
+	return WithSource("s", DataSource[uint]{
+		SearchToken: func(_ context.Context, _ string, limit int, token string) (Page[uint], error) {
+			*asked = append(*asked, token)
+			from := 0
+			if token != "" {
+				var err error
+				if from, err = strconv.Atoi(strings.TrimPrefix(token, "after-")); err != nil {
+					return Page[uint]{}, errors.New("a token that was not given")
+				}
+			}
+			var p Page[uint]
+			for i := from; i < min(from+limit, n); i++ {
+				p.Items = append(p.Items, Item[uint]{ID: uint(i + 1), Name: "n"})
+			}
+			if from+limit < n {
+				p.Next = "after-" + strconv.Itoa(from+limit)
+			}
+			return p, nil
+		},
+		Get: func(context.Context, []uint) ([]Item[uint], error) { return nil, nil },
+	})
+}
+
+func TestSourceReadByATokenIsPagedByIt(t *testing.T) {
+	var asked []string
+	tn, err := New(struct {
+		Who *uint `json:"who" tune:"source:s"`
+	}{}, tokenSource(7, &asked))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := tn.Handler()
+	type page struct {
+		Items []struct{ ID uint }
+		More  bool
+		Next  *string
+	}
+	read := func(path string) page {
+		w := do(h, "GET", path, "", nil)
+		var p page
+		if err := json.Unmarshal(w.Body.Bytes(), &p); err != nil || w.Code != 200 {
+			t.Fatalf("%s: %d %v %s", path, w.Code, err, w.Body)
+		}
+		return p
+	}
+	// 7 entries, 3 to a page: 3 + 3 + 1; each page says where the next one is, the last says there is none
+	var seen []uint
+	path := "/sources/s/search?limit=3"
+	for pages := 0; ; pages++ {
+		p := read(path)
+		for _, it := range p.Items {
+			seen = append(seen, it.ID)
+		}
+		if p.Next == nil {
+			t.Fatal("a source with tokens says its next token (empty at the end)")
+		}
+		if !p.More {
+			if pages != 2 || *p.Next != "" {
+				t.Errorf("the last page came after %d pages, next %q", pages+1, *p.Next)
+			}
+			break
+		}
+		path = "/sources/s/search?limit=3&after=" + url.QueryEscape(*p.Next)
+		if pages > 5 {
+			t.Fatal("it does not end")
+		}
+	}
+	if !slices.Equal(seen, []uint{1, 2, 3, 4, 5, 6, 7}) {
+		t.Errorf("seen %v", seen)
+	}
+	if want := []string{"", "after-3", "after-6"}; !slices.Equal(asked, want) {
+		t.Errorf("the source was asked with the tokens %q, want %q", asked, want)
+	}
+	// the first page needs no token, and an offset means nothing to it
+	asked = nil
+	read("/sources/s/search?limit=3&offset=5")
+	if want := []string{""}; !slices.Equal(asked, want) {
+		t.Errorf("asked with %q", asked)
+	}
+	// a token that is too long is refused, and what the source fails with does not reach the page
+	if w := do(h, "GET", "/sources/s/search?after="+strings.Repeat("x", sourceMaxToken+1), "", nil); w.Code != 400 {
+		t.Errorf("a long token: %d", w.Code)
+	}
+	if w := do(h, "GET", "/sources/s/search?after=forged", "", nil); w.Code != 502 || strings.Contains(w.Body.String(), "not given") {
+		t.Errorf("a failing source: %d %s", w.Code, w.Body)
+	}
+}
+
+// a source with tokens can be put together with others: its first entries are read page by page as far as they are needed
+func TestSourceReadByATokenCombines(t *testing.T) {
+	var asked []string
+	byToken := DataSource[uint]{
+		SearchToken: func(_ context.Context, _ string, limit int, token string) (Page[uint], error) {
+			asked = append(asked, token)
+			from, _ := strconv.Atoi(token)
+			p := Page[uint]{}
+			for i := from; i < min(from+2, 10); i++ { // two to a page, whatever the limit is
+				p.Items = append(p.Items, Item[uint]{ID: uint(100 + i), Name: "t"})
+			}
+			if from+2 < 10 {
+				p.Next = strconv.Itoa(from + 2)
+			}
+			return p, nil
+		},
+		Get: func(context.Context, []uint) ([]Item[uint], error) { return nil, nil },
+	}
+	own := StaticSource([]Item[uint]{{ID: 1, Name: "one"}})
+	both := CombineSources(own, byToken)
+	got, err := both.Search(context.Background(), "", 4, 0)
+	if ids := idsOf(got); err != nil || !slices.Equal(ids, []uint{1, 100, 101, 102}) {
+		t.Errorf("the first page: %v, %v", ids, err)
+	}
+	if want := []string{"", "2"}; !slices.Equal(asked, want) { // 3 are needed of it: two pages
+		t.Errorf("the source with tokens was read with %q, want %q", asked, want)
+	}
+	got, err = both.Search(context.Background(), "", 4, 4)
+	if ids := idsOf(got); err != nil || !slices.Equal(ids, []uint{103, 104, 105, 106}) {
+		t.Errorf("the next page: %v, %v", ids, err)
+	}
+}
+
+func idsOf(items []Item[uint]) (ids []uint) {
+	for _, it := range items {
+		ids = append(ids, it.ID)
+	}
+	return
 }

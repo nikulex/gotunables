@@ -24,7 +24,8 @@ const protocol = 1
 //	GET    /schema        {fields: [{key, type, desc, default, value, modified, enum, min, max}]}
 //	PUT    /values/{key}  {"value": ...}  -> the updated field
 //	DELETE /values/{key}  back to the default -> the updated field
-//	GET    /sources/{name}/search?q=&limit=&offset=  the entries of a data source that match -> {items: [{id, name, image}], more}
+//	GET    /sources/{name}/search?q=&limit=&offset=|after=  the entries of a data source that match -> {items: [{id, name, image}], more, next};
+//	       a source that is read by a token takes after= (the next of the page before) instead of offset=
 //	GET    /sources/{name}/items?id=&id=     the entries of these ids -> {items: [...]} (the ones that exist)
 //
 // Mount it under a prefix with http.StripPrefix and a trailing slash:
@@ -266,6 +267,25 @@ func (c *core) handleSourceSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), sourceTimeout)
 	defer cancel()
+	if src.searchToken != nil { // read by a token: the page says where the next one is
+		token := r.URL.Query().Get("after")
+		if len([]rune(token)) > sourceMaxToken {
+			c.writeError(w, http.StatusBadRequest, "the token is too long")
+			return
+		}
+		items, next, err := src.searchToken(ctx, q, limit, token)
+		if err != nil {
+			c.opts.log.Error("tunables: source search failed", "source", src.name, "error", err)
+			c.writeError(w, http.StatusBadGateway, "the source did not answer")
+			return
+		}
+		if len([]rune(next)) > sourceMaxToken { // a token the page could not send back
+			c.opts.log.Error("tunables: source token is too long", "source", src.name)
+			next = ""
+		}
+		c.writeJSON(w, http.StatusOK, map[string]any{"items": cut(items, limit), "more": next != "", "next": next})
+		return
+	}
 	// one more than the page: that is how it is known whether there is a next one
 	items, err := src.search(ctx, q, limit+1, offset)
 	if err != nil {

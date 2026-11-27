@@ -128,12 +128,12 @@ button,input,textarea{font-family:inherit}
 .avatar.letter{--h:210;background:hsl(var(--h) 55% 88%);color:hsl(var(--h) 60% 26%);outline-color:hsl(var(--h) 40% 76%)}
 @media (prefers-color-scheme:dark){.avatar.letter{background:hsl(var(--h) 35% 26%);color:hsl(var(--h) 70% 86%);outline-color:hsl(var(--h) 30% 38%)}}
 .chip.has-avatar{padding-left:3px;gap:6px}
-.chip-sub{color:hsl(var(--muted-foreground));font-weight:400;font-size:12px}
+.chip-sub{flex:none;white-space:nowrap;color:hsl(var(--muted-foreground));font-weight:400;font-size:12px} /* the id is not broken: the name gives way */
 .chip.missing{color:hsl(var(--muted-foreground));background:hsl(var(--muted));font-weight:400}
 .pick-item{display:flex;align-items:center;gap:10px;border-radius:calc(var(--radius) - 4px);padding:6px 8px;font-size:14px;line-height:20px;cursor:pointer;user-select:none}
 .pick-item:hover,.pick-item.active{background:hsl(var(--accent));color:hsl(var(--accent-foreground))}
 .pick-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pick-id{flex:none;color:hsl(var(--muted-foreground));font-size:12px;font-variant-numeric:tabular-nums}
+.pick-id{flex:none;white-space:nowrap;color:hsl(var(--muted-foreground));font-size:12px;font-variant-numeric:tabular-nums}
 .pick-check{flex:none;display:flex;width:16px;height:16px}
 .pick-check svg{width:16px;height:16px}
 .pick-note{padding:10px 8px;font-size:14px;line-height:20px;color:hsl(var(--muted-foreground))}
@@ -229,10 +229,13 @@ main{max-width:768px;margin:0 auto;padding:32px 24px calc(64px + env(safe-area-i
 
 .field{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:68px;padding:14px 20px;box-shadow:inset 0 1px 0 hsl(var(--border))}
 .card>.field:first-child{box-shadow:none}
-.card.rule{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)} /* a Rule of a targeting: Only | Except */
-.card.rule>.field{box-shadow:none}
-.card.rule .ctl{align-items:flex-start} /* side by side: the taller column does not centre the other's content */
-.card.rule>.field+.field{box-shadow:inset 1px 0 0 hsl(var(--border))}
+/* a Rule of a targeting: one list at a time, Only or Except, switched in the row of its search (both are shown, one under the other, only when both hold something) */
+.field[hidden]{display:none}
+.rule-line{display:flex;align-items:center;gap:8px;width:100%}
+.rule-line .picker-input{flex:1;min-width:0}
+.card.rule.single .select-buttons{flex:none}
+.card.rule.single>.field{min-height:0;box-shadow:none}
+.card.rule.single .label{display:none} /* the switch says which it is */
 .rows>.field{padding:12px 0;box-shadow:none} /* the fields of the root have no card around them */
 
 .field-block{flex-direction:column;align-items:stretch;gap:8px;min-height:0}
@@ -287,8 +290,6 @@ main{max-width:768px;margin:0 auto;padding:32px 24px calc(64px + env(safe-area-i
   .w-slider{width:auto;flex:1 1 0;min-width:0}
   .field-block .field-text{flex:none}
   .field-block .ctl{flex:1}
-  .card.rule{grid-template-columns:minmax(0,1fr)}
-  .card.rule>.field+.field{box-shadow:inset 0 1px 0 hsl(var(--border))}
 }
 </style>
 </head>
@@ -779,6 +780,7 @@ function Picker(f, onChange) {
   let state = "idle"; // idle | loading | error
   let active = -1;
   let more = false;     // the source has entries after the ones listed: they are read as the list is scrolled to its end
+  let nextToken;        // a source that is read by a token says where its next page is (undefined: it takes an offset)
   let paging = false;   // the next page is on its way
   let pageError = false;
   let pointer = { x: -1, y: -1 };
@@ -882,12 +884,14 @@ function Picker(f, onChange) {
       paging = false;
       pageError = false;
       more = false;
+      nextToken = undefined;
       renderMenu();
       try {
         const data = await fetchPage(0);
         if (mine !== seq) return;
         results = data.items;
         more = !!data.more;
+        nextToken = data.next;
         results.forEach((e) => entries.set(entryKey(f.source, e.id), e));
         state = "idle";
         active = results.length ? 0 : -1;
@@ -901,10 +905,12 @@ function Picker(f, onChange) {
     }, delay);
   }
 
-  const searchPath = (offset) => "sources/" + encodeURIComponent(f.source) + "/search?limit=20&offset=" + offset + "&q=" + encodeURIComponent(query);
+  // a source that takes a token is asked for the page after the token, one that takes an offset for the one after that many
+  const searchPath = (offset, token) => "sources/" + encodeURIComponent(f.source) + "/search?limit=20&q=" + encodeURIComponent(query) +
+    (token ? "&after=" + encodeURIComponent(token) : "&offset=" + offset);
   // a page of the search: from the cache while it is fresh, else from the source (which may limit how often it is asked)
-  async function fetchPage(offset) {
-    const path = searchPath(offset);
+  async function fetchPage(offset, token) {
+    const path = searchPath(offset, token);
     const hit = pageCache.get(path);
     if (hit && Date.now() - hit.at < PAGE_TTL) return hit.data;
     const data = await api("GET", path, undefined, ctrl.signal);
@@ -921,13 +927,15 @@ function Picker(f, onChange) {
     paging = true;
     renderMenu();
     try {
-      const data = await fetchPage(results.length);
+      const sent = nextToken;
+      const data = await fetchPage(results.length, sent);
       if (mine !== seq) return; // another search has begun: it has reset these
       const have = new Set(results.map((e) => e.id));
       const fresh = data.items.filter((e) => !have.has(e.id)); // a source that changed meanwhile may repeat one
       fresh.forEach((e) => entries.set(entryKey(f.source, e.id), e));
       results = results.concat(fresh);
-      more = !!data.more && fresh.length > 0;
+      nextToken = data.next;
+      more = !!data.more && fresh.length > 0 && !(sent && data.next === sent); // a source that gives the same token again would be read for ever
     } catch (e) {
       if (e.name === "AbortError" || e instanceof AuthError || mine !== seq) return;
       pageError = true;
@@ -961,6 +969,7 @@ function Picker(f, onChange) {
     state = "idle";
     active = -1;
     more = paging = pageError = false;
+    nextToken = undefined;
     input.setAttribute("aria-expanded", "false");
     input.removeAttribute("aria-activedescendant");
     document.removeEventListener("pointerdown", outside, true);
@@ -1344,13 +1353,54 @@ function openDialog({ title, description, searchPlaceholder, empty, opener, item
 
 // The fields of a group go into a card; the ones of the root (no struct around them) are plain rows.
 function rowsCard(node, plain = false) {
-  const rule = !plain && (groupMeta.get(node.key) || {}).rule; // a Rule: Only and Except side by side
+  const rule = !plain && (groupMeta.get(node.key) || {}).rule; // a Rule: Only or Except, one at a time
   const card = el("div", { className: plain ? "rows" : "card" + (rule ? " rule" : "") });
-  for (const r of node.rows) {
+  const made = node.rows.map((r) => {
     const row = makeRow(r.f.name || r.name, r.f);
     rows.set(r.f.key, row);
-    card.append(row.el);
+    return { name: r.name, row };
+  });
+  const only = made.find((m) => m.name === "include");
+  const except = made.find((m) => m.name === "exclude");
+  // A Rule holds one of the two as far as the page is concerned: a switch in the row of its search says which, and moves what
+  // is in the list to the other. (Both can be set through the API: then they are shown one under the other, as they are, with no switch.)
+  if (rule && only && except && !(ruleValues(node, "include").length && ruleValues(node, "exclude").length)) {
+    let mode = ruleValues(node, "exclude").length ? "Except" : "Only";
+    const switches = [];
+    const sync = () => {
+      only.row.el.hidden = mode !== "Only";
+      except.row.el.hidden = mode !== "Except";
+      for (const sw of switches) sw.set(mode);
+    };
+    const choose = (m) => {
+      if (m === mode) return;
+      const [from, to] = m === "Except" ? [only, except] : [except, only];
+      const values = ruleValues(node, from.name);
+      mode = m;
+      if (values.length) { // what was chosen stays chosen, on the other side
+        to.row.set(values);
+        from.row.set([]);
+      }
+      sync();
+    };
+    for (const m of [only, except]) { // each list has its own switch, in the row of its search: one is shown at a time
+      const sw = ButtonGroup(["Only", "Except"], choose);
+      switches.push(sw);
+      const adder = m.row.el.querySelector(".adder"); // typed values: the input and the plus
+      if (adder) adder.prepend(sw.el);
+      else { // picked from a source: the input
+        const input = m.row.el.querySelector(".picker-input");
+        const line = el("div", { className: "rule-line" });
+        input.before(line);
+        line.append(sw.el, input);
+      }
+    }
+    card.classList.add("single");
+    card.append(only.row.el, except.row.el);
+    sync();
+    return card;
   }
+  for (const m of made) card.append(m.row.el);
   return card;
 }
 

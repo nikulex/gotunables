@@ -83,6 +83,9 @@ convention used by the demo (and what tuneboard will suggest for a new source).
       // what is typed: at most limit entries after the first offset ones (the list is read page by page as it is scrolled,
       // in the same order every time); an empty query is the list that opens first
       Search: func(ctx context.Context, query string, limit, offset int) ([]tunables.Item[uint], error) { ... },
+      // or, for a source that takes a token (a cursor) and not an offset, set SearchToken instead of Search:
+      //   SearchToken: func(ctx context.Context, query string, limit int, token string) (tunables.Page[uint], error) { ... },
+      // the first page is asked for with an empty token, and the page says the token of the next one (Page.Next, empty at the end)
       // the entries of these ids (the ones that do not exist are left out): shows the chosen, checks a change
       Get: func(ctx context.Context, ids []uint) ([]tunables.Item[uint], error) { ... },
   }))
@@ -140,7 +143,8 @@ if t.Get().Features.NewCheckout.IsEnabled(&info) { ... } // enabled, and the inf
 That is all a program writes. For a hot path there is a `Matcher` (below): the same answer with no reflection.
 
 - **The page.** The rules sit right in the feature (`features.new_checkout.country.include`), each as one card with
-  **Only** and **Except** side by side. Only the rules that hold something are shown: the others are added from a dialog
+  one list and a switch **Only** | **Except** in the row of its search (a switch moves what was chosen to the other side; a Rule
+  that holds both, set through the API, shows both lists). Only the rules that hold something are shown: the others are added from a dialog
   (**Add targeting**, always under the rules: the names and descriptions of the rules, with a search) and taken away
   with the cross of their card, which empties them. A feature that is off has its targeting folded away, at once when
   the switch is turned, before it is saved.
@@ -210,7 +214,7 @@ type Store interface {
 | `GET /meta` | `{"name", "description", "protocol": 1}` |
 | `GET /schema` | `{"groups": [{key, name, desc, rule, feature, collapsed}], "fields": [{key, name, type, ui, desc, default, value, modified, enum, min, max, precision}]}`; a field with `source` has `ui: "picker"` and the name of the source, one that may be nobody has `optional: true` and a `null` value; a list or a set has `type: "list"\|"set"` and `item` (the type of an item; `enum`, `min`, `max`, `precision` are the item's), `minlen`, `maxlen`, and its `value` is an array | |
 | `PUT /values/{key}` | body `{"value": ...}` (`null` for a `*T` with nobody), returns the updated field |
-| `GET /sources/{name}/search?q=&limit=&offset=` | the entries of a data source that match: `{"items": [{id, name, image}], "more": bool}`; `limit` 1 to 50, default 20; the page reads further ones as the list is scrolled |
+| `GET /sources/{name}/search?q=&limit=&offset=` | the entries of a data source that match: `{"items": [{id, name, image}], "more": bool}`; `limit` 1 to 50, default 20; the page reads further ones as the list is scrolled. A source that is read by a token answers also with `"next"` (the token to send back as `after=` instead of `offset=`, at most 1000 characters) |
 | `GET /sources/{name}/items?id=&id=` | the entries of these ids (up to 100), the ones that exist: `{"items": [...]}` |
 | `DELETE /values/{key}` | back to the default |
 

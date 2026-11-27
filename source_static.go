@@ -78,7 +78,7 @@ func CombineSources[ID comparable](sources ...DataSource[ID]) DataSource[ID] {
 			seen := map[ID]bool{}
 			var all []Item[ID]
 			for _, s := range sources {
-				found, err := s.Search(ctx, query, offset+limit, 0) // what a page needs of it, from the top
+				found, err := s.top(ctx, query, offset+limit) // what a page needs of it, from the top
 				if err != nil {
 					return nil, err
 				}

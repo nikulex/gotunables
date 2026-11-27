@@ -3,6 +3,7 @@ package tunables
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"slices"
 	"strings"
@@ -78,50 +79,50 @@ func TestFeatureIsOnForWhoIsInTheTargeting(t *testing.T) {
 	var f Feature[siteTargeting]
 	info := siteInfo{Country: "rs", Languages: []string{"sr", "en"}, Provider: "google", UserID: 7}
 
-	if f.On(info) {
+	if f.IsEnabled(info) {
 		t.Error("a feature that is not enabled is off for everybody")
 	}
 	f.Enabled = true
-	if !f.On(info) || !f.On(siteInfo{}) || !f.On(nil) {
+	if !f.IsEnabled(info) || !f.IsEnabled(siteInfo{}) || !f.IsEnabled(nil) {
 		t.Error("enabled with no targeting: on for everybody, whatever is known of them")
 	}
 	f.Targeting.Country.Include = NewSet("rs", "ua")
-	if !f.On(info) || f.On(siteInfo{Country: "us"}) {
+	if !f.IsEnabled(info) || f.IsEnabled(siteInfo{Country: "us"}) {
 		t.Error("only those countries")
 	}
-	if f.On(siteInfo{}) || f.On(nil) {
+	if f.IsEnabled(siteInfo{}) || f.IsEnabled(nil) {
 		t.Error("a country that is not known is not in a list of countries")
 	}
 	f.Targeting.Provider.Exclude = NewSet("email")
-	if !f.On(info) || f.On(siteInfo{Country: "rs", Provider: "email"}) {
+	if !f.IsEnabled(info) || f.IsEnabled(siteInfo{Country: "rs", Provider: "email"}) {
 		t.Error("all providers but one")
 	}
-	if !f.On(siteInfo{Country: "rs"}) {
+	if !f.IsEnabled(siteInfo{Country: "rs"}) {
 		t.Error("a provider that is not known is not one that is excluded")
 	}
 	f.Targeting.Languages.Include = NewSet("en")
-	if !f.On(info) || f.On(siteInfo{Country: "rs", Languages: []string{"sr"}}) {
+	if !f.IsEnabled(info) || f.IsEnabled(siteInfo{Country: "rs", Languages: []string{"sr"}}) {
 		t.Error("one of the languages has to be in")
 	}
 	f.Targeting.UserID.Exclude = NewSet[uint](13)
-	if !f.On(info) || f.On(siteInfo{Country: "rs", Languages: []string{"en"}, UserID: 13}) {
+	if !f.IsEnabled(info) || f.IsEnabled(siteInfo{Country: "rs", Languages: []string{"en"}, UserID: 13}) {
 		t.Error("a person that is kept out")
 	}
 	f.Targeting.Groups.Include = NewSet("beta")
-	if f.On(info) || !f.On(siteInfo{Country: "rs", Languages: []string{"en"}, Groups: []string{"staff", "beta"}}) {
+	if f.IsEnabled(info) || !f.IsEnabled(siteInfo{Country: "rs", Languages: []string{"en"}, Groups: []string{"staff", "beta"}}) {
 		t.Error("one of the groups has to be in")
 	}
 	if !f.Targets(siteInfo{Country: "rs", Languages: []string{"en"}, Groups: []string{"beta"}}) {
 		t.Error("Targets says the same without the switch")
 	}
 	f.Enabled = false
-	if f.On(info) || !f.Targets(siteInfo{Country: "rs", Languages: []string{"en"}, Groups: []string{"beta"}}) {
-		t.Error("the switch is only On's")
+	if f.IsEnabled(info) || !f.Targets(siteInfo{Country: "rs", Languages: []string{"en"}, Groups: []string{"beta"}}) {
+		t.Error("the switch is only IsEnabled's")
 	}
 	// the info may be a pointer
 	f.Enabled = true
 	f.Targeting.Groups = Rule[string]{}
-	if !f.On(&info) || f.On((*siteInfo)(nil)) {
+	if !f.IsEnabled(&info) || f.IsEnabled((*siteInfo)(nil)) {
 		t.Error("a pointer to the info works, a nil one knows nothing")
 	}
 }
@@ -134,17 +135,17 @@ func TestFeatureInfoThatIsExtendedByEmbedding(t *testing.T) {
 	f.Enabled = true
 	f.Targeting.Country.Include = NewSet("rs")
 	f.Targeting.Provider.Include = NewSet("google")
-	if !f.On(moreInfo{siteInfoBase{Country: "rs"}, "google"}) || f.On(moreInfo{siteInfoBase{Country: "us"}, "google"}) {
+	if !f.IsEnabled(moreInfo{siteInfoBase{Country: "rs"}, "google"}) || f.IsEnabled(moreInfo{siteInfoBase{Country: "us"}, "google"}) {
 		t.Error("the fields of an embedded struct are the info's")
 	}
 	// the info that cannot answer a Rule of Include does not meet it, but meets one that only keeps somebody out
-	if f.On(siteInfoBase{Country: "rs"}) {
+	if f.IsEnabled(siteInfoBase{Country: "rs"}) {
 		t.Error("a Rule of Include that the info cannot answer is not met")
 	}
 	var g Feature[siteTargeting]
 	g.Enabled = true
 	g.Targeting.UserID.Exclude = NewSet[uint](13)
-	if !g.On(siteInfoBase{}) {
+	if !g.IsEnabled(siteInfoBase{}) {
 		t.Error("an Exclude that the info cannot answer lets everybody in")
 	}
 }
@@ -277,7 +278,7 @@ func TestFeatureInTheSettings(t *testing.T) {
 		t.Errorf("the source of the rule is asked: %d %s", w.Code, w.Body)
 	}
 	c := tn.Get().Features.Checkout
-	if !c.On(siteInfo{Country: "rs", Provider: "google"}) || c.On(siteInfo{Country: "rs", Provider: "email"}) || c.On(siteInfo{Country: "us"}) || c.On(siteInfo{Country: "rs", UserID: 5}) {
+	if !c.IsEnabled(siteInfo{Country: "rs", Provider: "google"}) || c.IsEnabled(siteInfo{Country: "rs", Provider: "email"}) || c.IsEnabled(siteInfo{Country: "us"}) || c.IsEnabled(siteInfo{Country: "rs", UserID: 5}) {
 		t.Errorf("the feature as it was set: %+v", c)
 	}
 	if tn.Get().Features.Beta.Enabled {
@@ -287,7 +288,7 @@ func TestFeatureInTheSettings(t *testing.T) {
 	if err := tn.Reset("features.checkout.country.include"); err != nil {
 		t.Fatal(err)
 	}
-	if !tn.Get().Features.Checkout.On(siteInfo{Country: "us", Provider: "google"}) {
+	if !tn.Get().Features.Checkout.IsEnabled(siteInfo{Country: "us", Provider: "google"}) {
 		t.Error("reset: for everybody again")
 	}
 }
@@ -578,19 +579,19 @@ func TestMatcherSaysWhatOnSays(t *testing.T) {
 			if got := m.Targets(&tg, &info); got != want {
 				t.Errorf("rules %d, info %d: matcher %v, reflection %v", i, j, got, want)
 			}
-			if got := f.On(info); got != want {
-				t.Errorf("rules %d, info %d: On %v, reflection %v", i, j, got, want)
+			if got := f.IsEnabled(info); got != want {
+				t.Errorf("rules %d, info %d: IsEnabled %v, reflection %v", i, j, got, want)
 			}
-			if got := f.On(&info); got != want {
-				t.Errorf("rules %d, info %d: On(pointer) %v, reflection %v", i, j, got, want)
+			if got := f.IsEnabled(&info); got != want {
+				t.Errorf("rules %d, info %d: IsEnabled(pointer) %v, reflection %v", i, j, got, want)
 			}
-			if got := m.On(&f, &info); got != want {
-				t.Errorf("rules %d, info %d: Matcher.On %v, reflection %v", i, j, got, want)
+			if got := m.IsEnabled(&f, &info); got != want {
+				t.Errorf("rules %d, info %d: Matcher.IsEnabled %v, reflection %v", i, j, got, want)
 			}
 		}
 		off := f
 		off.Enabled = false
-		if m.On(&off, &infos[1]) || off.On(infos[1]) {
+		if m.IsEnabled(&off, &infos[1]) || off.IsEnabled(infos[1]) {
 			t.Error("a feature that is off is off")
 		}
 	}
@@ -607,14 +608,14 @@ func TestMatcherCostsNothingToUse(t *testing.T) {
 	f.Targeting.Languages.Include = NewSet("en")
 	f.Targeting.UserID.Exclude = NewSet[uint](13)
 	info := fullInfo{Country: "rs", Languages: []string{"sr", "en"}, Provider: "google", UserID: 7}
-	if !m.On(&f, &info) {
+	if !m.IsEnabled(&f, &info) {
 		t.Fatal("it is in")
 	}
-	if n := testing.AllocsPerRun(1000, func() { m.On(&f, &info) }); n != 0 {
+	if n := testing.AllocsPerRun(1000, func() { m.IsEnabled(&f, &info) }); n != 0 {
 		t.Errorf("a check of a Matcher allocates %v times", n)
 	}
 	// the one that finds its plan by itself: a lookup and, for a value, a copy of the info; the reflection is not done again
-	if n := testing.AllocsPerRun(1000, func() { f.On(&info) }); n > 1 {
+	if n := testing.AllocsPerRun(1000, func() { f.IsEnabled(&info) }); n > 1 {
 		t.Errorf("a check through a pointer allocates %v times", n)
 	}
 }
@@ -634,10 +635,10 @@ func TestMatcherRefusesWhatItCannotFollow(t *testing.T) {
 	if _, err := NewMatcher[siteTargeting, viaPointer](); err == nil || !strings.Contains(err.Error(), "embedded pointer") {
 		t.Errorf("an embedded pointer has no offset: %v", err)
 	}
-	// ...but Feature.On still reads it (by reflection)
+	// ...but Feature.IsEnabled still reads it (by reflection)
 	f := Feature[siteTargeting]{Enabled: true}
 	f.Targeting.Country.Include = NewSet("rs")
-	if !f.On(viaPointer{base: &base{Country: "rs"}}) || f.On(viaPointer{base: &base{Country: "us"}}) || f.On(viaPointer{}) {
+	if !f.IsEnabled(viaPointer{base: &base{Country: "rs"}}) || f.IsEnabled(viaPointer{base: &base{Country: "us"}}) || f.IsEnabled(viaPointer{}) {
 		t.Error("an embedded pointer is read")
 	}
 	if _, err := NewMatcher[siteTargeting, *fullInfo](); err == nil {
@@ -662,19 +663,19 @@ func BenchmarkFeatureChecks(b *testing.B) {
 	b.Run("matcher", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			m.On(&f, &info)
+			m.IsEnabled(&f, &info)
 		}
 	})
 	b.Run("on-pointer", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			f.On(&info)
+			f.IsEnabled(&info)
 		}
 	})
 	b.Run("on-value", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			f.On(info)
+			f.IsEnabled(info)
 		}
 	})
 	b.Run("reflection-every-time", func(b *testing.B) {
@@ -684,4 +685,65 @@ func BenchmarkFeatureChecks(b *testing.B) {
 			targets(tv, info)
 		}
 	})
+}
+
+func TestCombinedSources(t *testing.T) {
+	ctx := context.Background()
+	extra := StaticSource([]Item[string]{{ID: "xx", Name: "Xanadu"}, {ID: "rs", Name: "Serbia again"}, {ID: "zz", Name: "Zeta"}})
+	ds := CombineSources(StaticSource(testCountries), extra)
+	ids := func(items []Item[string]) []string {
+		out := make([]string, len(items))
+		for i, it := range items {
+			out[i] = it.ID
+		}
+		return out
+	}
+	// the first source's entries first, then the other's, the same id once and from the first
+	var all []Item[string]
+	for offset := 0; ; offset += 4 {
+		page, err := ds.Search(ctx, "", 4, offset)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(page) == 0 {
+			break
+		}
+		all = append(all, page...)
+	}
+	if want := append(ids(testCountries), "xx", "zz"); !slices.Equal(ids(all), want) {
+		t.Errorf("paged: %v, want %v", ids(all), want)
+	}
+	for _, it := range all {
+		if it.ID == "rs" && it.Name != "Serbia" {
+			t.Errorf("the first source's entry wins: %+v", it)
+		}
+	}
+	if got, _ := ds.Search(ctx, "zeta", 10, 0); !slices.Equal(ids(got), []string{"zz"}) {
+		t.Errorf("an entry of the second: %v", ids(got))
+	}
+	found, _ := ds.Get(ctx, []string{"rs", "xx", "nope"})
+	if !slices.Equal(ids(found), []string{"rs", "xx"}) {
+		t.Errorf("get: %v", ids(found))
+	}
+	// a source that fails fails the search
+	bad := DataSource[string]{
+		Search: func(context.Context, string, int, int) ([]Item[string], error) { return nil, errors.New("down") },
+		Get:    func(context.Context, []string) ([]Item[string], error) { return nil, errors.New("down") },
+	}
+	if _, err := CombineSources(StaticSource(testCountries), bad).Search(ctx, "zzz", 5, 0); err == nil {
+		t.Error("a list that is not whole is not shown")
+	}
+	// it works as a source of a setting: the entries of both can be chosen
+	tn, err := New(struct {
+		Where Set[string] `json:"where" tune:"source:both"`
+	}{}, WithSource("both", ds))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w := do(tn.Handler(), "PUT", "/values/where", `{"value":["rs","xx"]}`, jsonCT); w.Code != 200 {
+		t.Errorf("%d %s", w.Code, w.Body)
+	}
+	if w := do(tn.Handler(), "PUT", "/values/where", `{"value":["nope"]}`, jsonCT); w.Code != 400 {
+		t.Errorf("%d %s", w.Code, w.Body)
+	}
 }

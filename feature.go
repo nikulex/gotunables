@@ -60,7 +60,7 @@ type ruleMarker interface{ ruleElem() reflect.Type }
 //	}
 //
 //	info := Info{Country: "rs"} // any struct that has a field for each Rule (see the httptargeting module for a web request's)
-//	if t.Get().Features.NewCheckout.On(info) { // enabled, and the request is in the targeting
+//	if t.Get().Features.NewCheckout.IsEnabled(info) { // enabled, and the request is in the targeting
 //
 // In the settings the Rules are right in the feature, beside "enabled": features.new_checkout.country.include.
 type Feature[T any] struct {
@@ -68,9 +68,9 @@ type Feature[T any] struct {
 	Targeting T    `json:"targeting" tune:"flatten:true"`
 }
 
-// On reports whether the feature is on for what the info says: it is enabled and the info is in the targeting (see Targets for
+// IsEnabled reports whether the feature is on for what the info says: it is enabled and the info is in the targeting (see Targets for
 // what the info is). For a place that is hot, make a Matcher.
-func (f *Feature[T]) On(info any) bool { return f.Enabled && f.Targets(info) }
+func (f *Feature[T]) IsEnabled(info any) bool { return f.Enabled && f.Targets(info) }
 
 // Targets reports whether the info is in the targeting, whether the feature is enabled or not.
 //
@@ -312,9 +312,9 @@ func infoValues(iv reflect.Value, r rulePlan) []reflect.Value {
 //	m, err := tunables.NewMatcher[Targeting, Info]() // the targeting and the info are checked against each other, as CheckInfo does
 //	...
 //	info := Info{Info: web.Parse(r), UserID: id}
-//	if m.On(&t.Get().Features.NewCheckout, &info) { ... }
+//	if m.IsEnabled(&t.Get().Features.NewCheckout, &info) { ... }
 //
-// Feature.On(info any) is the same without making one: it finds the plan of the two types by itself, once (the reflection is
+// Feature.IsEnabled(info any) is the same without making one: it finds the plan of the two types by itself, once (the reflection is
 // cached), and costs a lookup and a copy of the info for each check.
 type Matcher[T, I any] struct {
 	rules []ruleEval
@@ -342,8 +342,8 @@ func (m *Matcher[T, I]) Targets(t *T, info *I) bool {
 	return runRules(m.rules, unsafe.Pointer(t), unsafe.Pointer(info))
 }
 
-// On reports whether the feature is enabled and the info is in its targeting (see Feature.On).
-func (m *Matcher[T, I]) On(f *Feature[T], info *I) bool {
+// IsEnabled reports whether the feature is enabled and the info is in its targeting (see Feature.IsEnabled).
+func (m *Matcher[T, I]) IsEnabled(f *Feature[T], info *I) bool {
 	return f.Enabled && m.Targets(&f.Targeting, info)
 }
 
@@ -367,7 +367,7 @@ const (
 )
 
 // compileRules makes the check of every Rule of the targeting type tt against the info type it. Strict: a Rule that the info
-// has nothing for is a mistake. Not strict: it is unknown, as it is for Feature.On; ok is false when a path to a field goes
+// has nothing for is a mistake. Not strict: it is unknown, as it is for Feature.IsEnabled; ok is false when a path to a field goes
 // behind an embedded pointer, which an offset cannot follow (then the info is read by reflection).
 func compileRules(tt, it reflect.Type, strict bool) (rules []ruleEval, ok bool, err error) {
 	infoFields := infoFieldsOf(it)

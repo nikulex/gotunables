@@ -145,8 +145,8 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
 			"info":         mine,
-			"new_checkout": base.On(&f.NewCheckout, &info),
-			"beta":         beta.On(&f.Beta, &mine),
+			"new_checkout": base.IsEnabled(&f.NewCheckout, &info),
+			"beta":         beta.IsEnabled(&f.Beta, &mine),
 		})
 	})
 	log.Println("settings UI: http://127.0.0.1:6767/")

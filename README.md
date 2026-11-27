@@ -103,7 +103,8 @@ convention used by the demo (and what tuneboard will suggest for a new source).
   goes to the log, not to the page. With `custom:true` the page also offers **Add "…" as typed** on top of the list
   whenever what was typed is an id (also when something was found; Ctrl/Cmd+Enter does it from the keyboard, Enter when
   nothing was found), and such an id is not checked against `Get`: for a chat the source does not list yet. `min`, `max`,
-  `enum` and `precision` do not go with `source`. A `Set(key, nil)`
+  `enum` and `precision` do not go with `source`. `tunables.StaticSource(items)` makes a source of a fixed list, and
+  `tunables.CombineSources(a, b)` one of several (what a program adds to a list that a package has). A `Set(key, nil)`
   or `Reset` makes a `*T` nobody. The demo picks users of a public test API (`go run ./demo`, page People).
 - `Get()` returns an immutable snapshot. `Set(key, value)` / `Reset(key)` do what the UI does.
 
@@ -132,11 +133,11 @@ type Config struct {
     } `json:"features"`
 }
 
-m, err := tunables.NewMatcher[Targeting, Info]() // once, at the start
-...
 info := Info{Country: "rs", Provider: "google", UserID: 7}
-if m.On(&t.Get().Features.NewCheckout, &info) { ... } // enabled, and the info is in the targeting
+if t.Get().Features.NewCheckout.IsEnabled(&info) { ... } // enabled, and the info is in the targeting
 ```
+
+That is all a program writes. For a hot path there is a `Matcher` (below): the same answer with no reflection.
 
 - **The page.** The rules sit right in the feature (`features.new_checkout.country.include`), each as one card with
   **Only** and **Except** side by side. Only the rules that hold something are shown: the others are added from a dialog
@@ -147,20 +148,21 @@ if m.On(&t.Get().Features.NewCheckout, &info) { ... } // enabled, and the info i
   languages of a browser: one has to be in, none may be out). A field that holds nothing (an empty text, 0) is *unknown*:
   a Rule that names who is in does not match it, one that only names who is out does. Embedded structs work as in Go,
   which is how an info is extended.
-- **The check, both ways.** `tunables.CheckInfo[Targeting, Info]()` (a `Matcher` does it when it is made) fails for a Rule
+- **The check, both ways.** `tunables.CheckInfo[Targeting, Info]()`, once, in a test or at the start (a `Matcher` does it when it is made) fails for a Rule
   that the info has no field for, a field of another type, and for a field of the info that no Rule is for: a field that
   is not meant for targeting says so with the tag `target:"-"`. A Rule that finds nothing silently does nothing, and this
   is what tells.
 - **Speed.** What reflection is needed (where each Rule and its field are, by offset) is worked out once. A
   `Matcher[T, I]` then checks with no reflection and no allocation, as plain Go code of the types of the Rules (the
-  info goes by a pointer). `feature.On(info any)` does not need a Matcher: it finds the plan of the two types by itself,
+  info goes by a pointer). `feature.IsEnabled(info any)` does not need a Matcher: it finds the plan of the two types by itself,
   once (the reflection is cached), and costs a lookup, and a copy of the info unless it is a pointer. A Matcher cannot
-  follow an embedded *pointer* (embed the struct itself); `On` reads those by reflection.
+  follow an embedded *pointer* (embed the struct itself); `IsEnabled` reads those by reflection.
 
 ### HTTP targeting: `httptargeting`
 
 The targeting of a web request (the place of the address, the languages, the browser, the system, the kind of device) is
-a module of its own, `github.com/nikulex/gotunables/httptargeting`, so that this one has no dependencies: see its README. Its
+a module of its own, `github.com/nikulex/gotunables/httptargeting`, so that this one has no dependencies: see its README (the geo
+database file and the ISO lists are two more modules beside it, `httptargeting/geo/mmdb` and `httptargeting/geo/iso`). Its
 `Info` and `Targeting` work with `Feature` and `Matcher` as any you declare yourself, and are embedded into your own to extend them.
 
 ## Storage

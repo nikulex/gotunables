@@ -155,7 +155,7 @@ func TestTheInfoAndTheTargetingGoTogether(t *testing.T) {
 	f.Targeting.Device.Exclude = tunables.NewSet("bot")
 	f.Targeting.Languages.Include = tunables.NewSet("en")
 	in := Info{Country: "rs", Device: "desktop", Languages: []string{"sr", "en"}, IP: "1.2.3.4", Language: "sr"}
-	if !m.On(&f, &in) || !f.On(in) {
+	if !m.IsEnabled(&f, &in) || !f.IsEnabled(in) {
 		t.Error("in")
 	}
 	for name, mutate := range map[string]func(i *Info){
@@ -166,7 +166,7 @@ func TestTheInfoAndTheTargetingGoTogether(t *testing.T) {
 	} {
 		i := in
 		mutate(&i)
-		if m.On(&f, &i) || f.On(i) {
+		if m.IsEnabled(&f, &i) || f.IsEnabled(i) {
 			t.Errorf("%s: must be off", name)
 		}
 	}
@@ -192,12 +192,12 @@ func TestExtendedByEmbedding(t *testing.T) {
 	f.Targeting.Provider.Include = tunables.NewSet("telegram")
 	f.Targeting.UserID.Exclude = tunables.NewSet[uint](13)
 	ok := myInfo{Info: Info{Country: "rs"}, Provider: "telegram", UserID: 7}
-	if !m.On(&f, &ok) {
+	if !m.IsEnabled(&f, &ok) {
 		t.Error("the base rules and the new ones together")
 	}
 	for _, bad := range []myInfo{{Info: Info{Country: "us"}, Provider: "telegram", UserID: 7}, {Info: Info{Country: "rs"}, Provider: "email", UserID: 7}, {Info: Info{Country: "rs"}, Provider: "telegram", UserID: 13}} {
 		bad := bad
-		if m.On(&f, &bad) {
+		if m.IsEnabled(&f, &bad) {
 			t.Errorf("%+v must be off", bad)
 		}
 	}
@@ -255,7 +255,7 @@ func TestTheListsTheRulesPickFrom(t *testing.T) {
 		source string
 		custom bool
 	}{
-		"country": {"countries", true}, "languages": {"languages", true}, "browser": {"browsers", true}, "os": {"systems", true}, "device": {"devices", false},
+		"country": {"countries", true}, "region": {"regions", true}, "city": {"cities", true}, "languages": {"languages", true}, "browser": {"browsers", true}, "os": {"systems", true}, "device": {"devices", false},
 	} {
 		for _, side := range []string{"include", "exclude"} {
 			f := by["features.checkout."+rule+"."+side]
@@ -264,10 +264,8 @@ func TestTheListsTheRulesPickFrom(t *testing.T) {
 			}
 		}
 	}
-	for _, key := range []string{"region", "city", "host"} { // typed: what a geo database calls them is its own
-		if f := by["features.checkout."+key+".include"]; f.Source != "" || f.UI != "chips" {
-			t.Errorf("%s: %+v", key, f)
-		}
+	if f := by["features.checkout.host.include"]; f.Source != "" || f.UI != "chips" { // typed
+		t.Errorf("host: %+v", f)
 	}
 
 	get := func(path string) string {
@@ -276,15 +274,6 @@ func TestTheListsTheRulesPickFrom(t *testing.T) {
 			t.Fatalf("%s: %d %s", path, w.Code, w.Body)
 		}
 		return w.Body.String()
-	}
-	if body := get("/sources/countries/search?q=serb"); !strings.Contains(body, `"id":"rs"`) || !strings.Contains(body, `"name":"Serbia"`) {
-		t.Errorf("countries: %s", body)
-	}
-	if body := get("/sources/countries/items?id=xk&id=ua"); !strings.Contains(body, `"name":"Kosovo"`) || !strings.Contains(body, `"name":"Ukraine"`) {
-		t.Errorf("a country the geo databases have: %s", body)
-	}
-	if body := get("/sources/languages/items?id=sr&id=uk"); !strings.Contains(body, `"name":"Serbian"`) || !strings.Contains(body, `"name":"Ukrainian"`) {
-		t.Errorf("languages: %s", body)
 	}
 	if body := get("/sources/browsers/search?q=chrome"); !strings.Contains(body, `"id":"chrome"`) {
 		t.Errorf("browsers: %s", body)
@@ -318,30 +307,8 @@ func TestTheListsTheRulesPickFrom(t *testing.T) {
 }
 
 func TestTheListsAreSane(t *testing.T) {
-	for name, items := range map[string][]tunables.Item[string]{"countries": countryList(), "languages": languageList()} {
-		seen := map[string]bool{}
-		for _, it := range items {
-			if it.ID == "" || it.Name == "" || it.ID != strings.ToLower(it.ID) || len(it.ID) != 2 || seen[it.ID] {
-				t.Errorf("%s: bad %+v", name, it)
-			}
-			seen[it.ID] = true
-		}
-		if len(items) < 150 {
-			t.Errorf("%s: only %d", name, len(items))
-		}
-	}
 	has := func(list []tunables.Item[string], id string) bool {
 		return slices.ContainsFunc(list, func(i tunables.Item[string]) bool { return i.ID == id })
-	}
-	for _, code := range []string{"rs", "ua", "ru", "us", "xk", "de", "id"} {
-		if !has(countryList(), code) {
-			t.Errorf("no country %s", code)
-		}
-	}
-	for _, code := range []string{"sr", "uk", "ru", "en", "id", "de"} {
-		if !has(languageList(), code) {
-			t.Errorf("no language %s", code)
-		}
 	}
 	// what the parser says of ordinary browsers is in the lists of the browsers and the systems
 	browsers := namedList("Chrome", "Firefox", "Safari", "Edge", "Opera")
@@ -352,5 +319,23 @@ func TestTheListsAreSane(t *testing.T) {
 		if got := DefaultUserAgentParser.Parse(ua); !has(browsers, got.Browser) {
 			t.Errorf("%q: %+v is not in the list", ua, got)
 		}
+	}
+}
+
+func TestTheStandardListsCanBeAddedTo(t *testing.T) {
+	// a program that has a browser that the list does not: the list and its own, together, under the same name
+	tn, err := tunables.New(features{},
+		tunables.WithSource("browsers", tunables.CombineSources(Browsers(), tunables.StaticSource([]tunables.Item[string]{{ID: "yandex browser", Name: "Yandex Browser"}}))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := tn.Handler()
+	w := do(h, "GET", "/sources/browsers/items?id=yandex+browser&id=chrome", "")
+	if body := w.Body.String(); w.Code != 200 || !strings.Contains(body, "Yandex Browser") || !strings.Contains(body, `"id":"chrome"`) {
+		t.Errorf("browsers: %d %s", w.Code, body)
+	}
+	// both can be chosen
+	if w := do(h, "PUT", "/values/features.checkout.browser.include", `{"value":["yandex browser","chrome"]}`); w.Code != 200 {
+		t.Errorf("%d %s", w.Code, w.Body)
 	}
 }

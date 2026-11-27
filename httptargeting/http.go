@@ -31,8 +31,8 @@ type Info struct {
 // to add Rules of your own.
 type Targeting struct {
 	Country   tunables.Rule[string] `json:"country" tune:"name:Country; desc:Where the address is; source:countries; custom:true"`
-	Region    tunables.Rule[string] `json:"region" tune:"name:Region; desc:As the geo database names it, in lower case"`
-	City      tunables.Rule[string] `json:"city" tune:"name:City; desc:As the geo database names it, in lower case"`
+	Region    tunables.Rule[string] `json:"region" tune:"name:Region; desc:As the geo database names it, in lower case; source:regions; custom:true"`
+	City      tunables.Rule[string] `json:"city" tune:"name:City; desc:As the geo database names it, in lower case; source:cities; custom:true"`
 	Languages tunables.Rule[string] `json:"languages" tune:"name:Browser language; desc:One of the languages of the browser has to be in; source:languages; custom:true"`
 	Browser   tunables.Rule[string] `json:"browser" tune:"name:Browser; source:browsers; custom:true"`
 	OS        tunables.Rule[string] `json:"os" tune:"name:System; source:systems; custom:true"`

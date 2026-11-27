@@ -1,38 +1,55 @@
 package httptargeting
 
 import (
-	"slices"
 	"strings"
 
-	"github.com/biter777/countries"
-	iso6391 "github.com/emvi/iso-639-1"
 	useragent "github.com/mileusna/useragent"
 	tunables "github.com/nikulex/gotunables"
 )
 
 // The lists the rules of Targeting pick from, registered when the package is imported: a field refers to them as
-// `tune:"source:countries"` and the program sets nothing up. A source of the program's own under the same name
+// `tune:"source:browsers"` and the program sets nothing up. A source of the program's own under the same name
 // (tunables.WithSource) replaces one of them, which is how to change a list or to follow another User-Agent parser.
 //
-//	countries  ISO 3166-1 codes in lower case ("rs"), by their English names (github.com/biter777/countries)
-//	languages  ISO 639-1 codes ("sr"), by their English names (github.com/emvi/iso-639-1)
 //	browsers, systems  the names github.com/mileusna/useragent knows; the parser names others too: the rules take a name
 //	           that is not in the list (custom)
 //	devices    mobile, tablet, desktop, bot
 //
-// What a geo database calls a region or a city is not the same in each one, so there are no lists of them: type them, or
-// register your own source for the database you use.
+//	countries, languages, regions, cities  empty: the lists of the places and of the languages come from the integrations,
+//	           each a module of its own so that this one holds only the User-Agent parser. Type the values (custom) or add one:
+//	           httptargeting/geo/mmdb: all four of the geo database file you have (the country, region and city of an address too)
+//	           httptargeting/geo/iso:  the countries and the languages by the ISO lists
+//	           or your own source under these names (tunables.WithSource).
 func init() {
-	tunables.RegisterSource("countries", tunables.StaticSource(countryList()))
-	tunables.RegisterSource("languages", tunables.StaticSource(languageList()))
-	tunables.RegisterSource("browsers", tunables.StaticSource(namedList(
+	for _, name := range []string{"countries", "languages", "regions", "cities"} {
+		tunables.RegisterSource(name, tunables.StaticSource[string](nil))
+	}
+	tunables.RegisterSource("browsers", Browsers())
+	tunables.RegisterSource("systems", Systems())
+	tunables.RegisterSource("devices", Devices())
+}
+
+// The lists as sources, to use as they are, to add to (tunables.CombineSources(httptargeting.Browsers(), mine)) or to
+// replace (tunables.WithSource("browsers", mine)).
+
+// Browsers is the list of the browsers the User-Agent parser knows.
+func Browsers() tunables.DataSource[string] {
+	return tunables.StaticSource(namedList(
 		useragent.Chrome, useragent.Firefox, useragent.Safari, useragent.Edge, useragent.Opera, useragent.OperaMini, useragent.OperaTouch,
 		useragent.Vivaldi, useragent.SamsungBrowser, useragent.InternetExplorer, useragent.HeadlessChrome,
-		useragent.FacebookApp, useragent.InstagramApp, useragent.TiktokApp)))
-	tunables.RegisterSource("systems", tunables.StaticSource(namedList(
+		useragent.FacebookApp, useragent.InstagramApp, useragent.TiktokApp))
+}
+
+// Systems is the list of the operating systems the User-Agent parser knows.
+func Systems() tunables.DataSource[string] {
+	return tunables.StaticSource(namedList(
 		useragent.Windows, useragent.WindowsPhone, useragent.MacOS, useragent.IOS, useragent.Android, useragent.Linux,
-		useragent.ChromeOS, useragent.FreeBSD, useragent.BlackBerry, useragent.Harmony)))
-	tunables.RegisterSource("devices", tunables.StaticSource(namedList("Mobile", "Tablet", "Desktop", "Bot")))
+		useragent.ChromeOS, useragent.FreeBSD, useragent.BlackBerry, useragent.Harmony))
+}
+
+// Devices is the list of the kinds of device: mobile, tablet, desktop, bot.
+func Devices() tunables.DataSource[string] {
+	return tunables.StaticSource(namedList("Mobile", "Tablet", "Desktop", "Bot"))
 }
 
 // namedList makes a list of names: the id is the name in lower case, which is how the parser's values are put.
@@ -41,25 +58,5 @@ func namedList(names ...string) []tunables.Item[string] {
 	for i, n := range names {
 		out[i] = tunables.Item[string]{ID: strings.ToLower(n), Name: n}
 	}
-	return out
-}
-
-func countryList() []tunables.Item[string] {
-	var out []tunables.Item[string]
-	for _, c := range countries.All() {
-		if code := strings.ToLower(c.Alpha2()); code != "" {
-			out = append(out, tunables.Item[string]{ID: code, Name: c.String()})
-		}
-	}
-	slices.SortFunc(out, func(a, b tunables.Item[string]) int { return strings.Compare(a.Name, b.Name) })
-	return out
-}
-
-func languageList() []tunables.Item[string] {
-	out := make([]tunables.Item[string], 0, len(iso6391.Languages))
-	for code, l := range iso6391.Languages {
-		out = append(out, tunables.Item[string]{ID: code, Name: l.Name})
-	}
-	slices.SortFunc(out, func(a, b tunables.Item[string]) int { return strings.Compare(a.Name, b.Name) })
 	return out
 }

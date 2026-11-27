@@ -53,6 +53,7 @@ type fieldDTO struct {
 	MinLen    *int     `json:"minlen,omitempty"` // a list or a set: how many items
 	MaxLen    *int     `json:"maxlen,omitempty"`
 	Source    string   `json:"source,omitempty"`   // the entries are picked from this data source (GET /sources/{source}/search and /items)
+	Custom    bool     `json:"custom,omitempty"`   // an id that is not in the source may be added by hand
 	Optional  bool     `json:"optional,omitempty"` // one entry or none: the value may be null
 }
 
@@ -211,7 +212,7 @@ type groupDTO struct {
 func (c *core) dto(f *field, s *snapshot) fieldDTO {
 	cur := f.read(s.cfg.Elem().FieldByIndex(f.index))
 	item := f // the field that holds the enum and the bounds: the item of a list or a set
-	d := fieldDTO{MinLen: f.minLen, MaxLen: f.maxLen, Source: f.source, Optional: f.ptr}
+	d := fieldDTO{MinLen: f.minLen, MaxLen: f.maxLen, Source: f.source, Custom: f.custom, Optional: f.ptr}
 	if f.collection() {
 		item = f.elem
 		d.Item = item.apiType()

@@ -56,6 +56,7 @@ convention used by the demo (and what tuneboard will suggest for a new source).
   | `min`, `max` | bounds of a number; durations like `min:10ms`. For a list or a set: of each item |
   | `minlen`, `maxlen` | how many items a list or a set may hold (at most 1000 anyway) |
   | `source` | the data source the ids are picked from (see "Picking from existing data") |
+  | `custom` | with `source`: `custom:true` lets an id the source does not know be added by hand too |
   | `key` | the key segment instead of the json/yaml name |
   | `precision` | digits shown after the point of a float (0 to 10): `precision:2` draws `0.20` and `1.00`, so the number never changes width. Default: as many as the step has |
   | `ui` | the component that edits the field; the first one is the default: bool `switch` or `checkbox`, enum `select` or `buttons`, number `counter`, `slider` (needs `min` and `max`) or `input`, string `input` or `textarea`, duration `input` |
@@ -77,8 +78,9 @@ convention used by the demo (and what tuneboard will suggest for a new source).
 
   ```go
   t, err := tunables.New(Config{}, tunables.WithSource("users", tunables.DataSource[uint]{
-      // what is typed, at most limit entries; an empty query is the list that opens first
-      Search: func(ctx context.Context, query string, limit int) ([]tunables.Item[uint], error) { ... },
+      // what is typed: at most limit entries after the first offset ones (the list is read page by page as it is scrolled,
+      // in the same order every time); an empty query is the list that opens first
+      Search: func(ctx context.Context, query string, limit, offset int) ([]tunables.Item[uint], error) { ... },
       // the entries of these ids (the ones that do not exist are left out): shows the chosen, checks a change
       Get: func(ctx context.Context, ids []uint) ([]tunables.Item[uint], error) { ... },
   }))
@@ -96,7 +98,10 @@ convention used by the demo (and what tuneboard will suggest for a new source).
   under an input as you type (a pause of 250 ms, the earlier request is cancelled). A change is refused when one of its
   ids is not found by `Get`; an id that was saved and deleted later stays, and is shown as "not found". `Search` and
   `Get` are cut off after 5 seconds, `limit` is at most 50, a query at most 100 characters, and what they fail with
-  goes to the log, not to the page. `min`, `max`, `enum` and `precision` do not go with `source`. A `Set(key, nil)`
+  goes to the log, not to the page. With `custom:true` the page also offers **Add "…" as typed** on top of the list
+  whenever what was typed is an id (also when something was found; Ctrl/Cmd+Enter does it from the keyboard, Enter when
+  nothing was found), and such an id is not checked against `Get`: for a chat the source does not list yet. `min`, `max`,
+  `enum` and `precision` do not go with `source`. A `Set(key, nil)`
   or `Reset` makes a `*T` nobody. The demo picks users of a public test API (`go run ./demo`, page People).
 - `Get()` returns an immutable snapshot. `Set(key, value)` / `Reset(key)` do what the UI does.
 
@@ -145,7 +150,7 @@ type Store interface {
 | `GET /meta` | `{"name", "description", "protocol": 1}` |
 | `GET /schema` | `{"groups": [{key, name, desc}], "fields": [{key, name, type, ui, desc, default, value, modified, enum, min, max, precision}]}`; a field with `source` has `ui: "picker"` and the name of the source, one that may be nobody has `optional: true` and a `null` value; a list or a set has `type: "list"\|"set"` and `item` (the type of an item; `enum`, `min`, `max`, `precision` are the item's), `minlen`, `maxlen`, and its `value` is an array | |
 | `PUT /values/{key}` | body `{"value": ...}` (`null` for a `*T` with nobody), returns the updated field |
-| `GET /sources/{name}/search?q=&limit=` | the entries of a data source that match: `{"items": [{id, name, image}]}`; `limit` 1 to 50, default 20 |
+| `GET /sources/{name}/search?q=&limit=&offset=` | the entries of a data source that match: `{"items": [{id, name, image}], "more": bool}`; `limit` 1 to 50, default 20; the page reads further ones as the list is scrolled |
 | `GET /sources/{name}/items?id=&id=` | the entries of these ids (up to 100), the ones that exist: `{"items": [...]}` |
 | `DELETE /values/{key}` | back to the default |
 

@@ -43,7 +43,7 @@ type Features struct {
 	People struct {
 		Owner     *int              `json:"owner" tune:"source:people; desc:One person, or nobody"`
 		Reviewers tunables.Set[int] `json:"reviewers" tune:"source:people; desc:Any number of people; maxlen:6; default:1,3"`
-		Rotation  []int             `json:"rotation" tune:"source:people; desc:The same person may come twice, the order matters"`
+		Rotation  []int             `json:"rotation" tune:"source:people; custom:true; desc:The same person may come twice, the order matters. An id that is not in the list can be added too"`
 	} `json:"people" tune:"name:People; desc:Picked from a data source: the users of dummyjson.com"`
 
 	Retry struct {

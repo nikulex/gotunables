@@ -19,6 +19,8 @@ type pickConfig struct {
 	Order  []uint    `json:"order" tune:"source:users"`
 	Chat   *int64    `json:"chat" tune:"source:chats"`
 	Code   string    `json:"code" tune:"source:codes"`
+	Free   []int64   `json:"free" tune:"source:chats; custom:true"`
+	Anyone *uint     `json:"anyone" tune:"source:users; custom:true"`
 }
 
 var testUsers = map[uint]string{1: "Ann", 2: "Bob", 3: "Annie", 4: "Carl"}
@@ -580,5 +582,81 @@ func TestSourceSearchPagesAndSaysWhetherThereIsMore(t *testing.T) {
 	read("/sources/s/search?offset=abc")
 	if gotOffset != 0 {
 		t.Errorf("a bad offset is 0, the source got %d", gotOffset)
+	}
+}
+
+func TestSourceCustomTakesAnIDTheSourceDoesNotKnow(t *testing.T) {
+	var asked int
+	tn, err := New(pickConfig{}, usersSource(), codesSource(), WithSource("chats", DataSource[int64]{
+		Search: func(context.Context, string, int, int) ([]Item[int64], error) { return nil, nil },
+		Get: func(_ context.Context, ids []int64) ([]Item[int64], error) {
+			asked++
+			return nil, nil // knows nobody
+		},
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := tn.Handler()
+	// a field with custom takes any id, and the source is not even asked
+	if w := do(h, "PUT", "/values/free", `{"value":[-1001234567890, 5]}`, jsonCT); w.Code != 200 {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	if err := tn.Set("anyone", uint(424242)); err != nil {
+		t.Fatal(err)
+	}
+	if asked != 0 {
+		t.Errorf("the source was asked %d times for a custom field", asked)
+	}
+	c := tn.Get()
+	if !slices.Equal(c.Free, []int64{-1001234567890, 5}) || c.Anyone == nil || *c.Anyone != 424242 {
+		t.Errorf("%+v", c)
+	}
+	// a field without it still refuses what the source does not know
+	if w := do(h, "PUT", "/values/owner", `{"value":424242}`, jsonCT); w.Code != http.StatusBadRequest {
+		t.Errorf("owner: %d %s", w.Code, w.Body)
+	}
+	// the page is told
+	w := do(h, "GET", "/schema", "", nil)
+	var out struct{ Fields []fieldDTO }
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range out.Fields {
+		if got, want := f.Custom, f.Key == "free" || f.Key == "anyone"; got != want {
+			t.Errorf("%s: custom %v, want %v", f.Key, got, want)
+		}
+	}
+}
+
+func TestSourceCustomNeedsASource(t *testing.T) {
+	for name, cfg := range map[string]any{
+		"without a source": struct {
+			Who uint `json:"who" tune:"custom:true"`
+		}{},
+		"a bad value": struct {
+			Who uint `json:"who" tune:"source:users; custom:maybe"`
+		}{},
+	} {
+		var err error
+		switch c := cfg.(type) {
+		case struct {
+			Who uint `json:"who" tune:"custom:true"`
+		}:
+			_, err = New(c, usersSource())
+		case struct {
+			Who uint `json:"who" tune:"source:users; custom:maybe"`
+		}:
+			_, err = New(c, usersSource())
+		}
+		if err == nil || !strings.Contains(err.Error(), "custom") {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	// custom:false is the same as nothing
+	if _, err := New(struct {
+		Who uint `json:"who" tune:"source:users; custom:false"`
+	}{}, usersSource()); err != nil {
+		t.Error(err)
 	}
 }

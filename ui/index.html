@@ -113,6 +113,13 @@ button,input,textarea{font-family:inherit}
 .pick-note{padding:10px 8px;font-size:14px;line-height:20px;color:hsl(var(--muted-foreground))}
 .pick-note.error{color:hsl(var(--destructive))}
 .pick-retry{cursor:pointer}
+.pick-custom-host{position:sticky;top:0;z-index:1;border-bottom:1px solid hsl(var(--border));background:hsl(var(--popover))}
+.pick-custom-host:empty{display:none}
+.pick-custom{display:flex;align-items:center;gap:8px;margin:4px;border-radius:calc(var(--radius) - 4px);padding:6px 8px;font-size:14px;line-height:20px;font-weight:500;cursor:pointer;user-select:none}
+.pick-custom:hover{background:hsl(var(--accent));color:hsl(var(--accent-foreground))}
+.pick-custom svg{flex:none;width:16px;height:16px}
+.pick-custom span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pick-custom[aria-disabled=true]{opacity:.5;cursor:default;background:transparent}
 
 /* ---- Counter: the quantity control of the shop (plus | input | minus), joined ---- */
 .counter{display:flex;flex:none;justify-content:space-between}
@@ -682,7 +689,7 @@ function Picker(f, onChange) {
       const e = known(id);
       const kids = e
         ? [Avatar(e), el("span", { textContent: e.name }), el("span", { className: "chip-sub", textContent: "#" + id })]
-        : [el("span", { textContent: "#" + id + (lookedUp.has(id) ? " (not found)" : "") })];
+        : [el("span", { textContent: "#" + id + (lookedUp.has(id) && !f.custom ? " (not found)" : "") })];
       const chip = el("span", { className: "chip has-avatar" + (e ? "" : " missing") }, ...kids);
       if (multi || f.optional) {
         const rm = el("button", { type: "button", className: "chip-x", ariaLabel: "Remove " + (e ? e.name : id) }, icon("luX"));
@@ -741,10 +748,47 @@ function Picker(f, onChange) {
     menu.style.top = (up ? r.top - Math.min(h, above) - 4 : r.bottom + 4) + "px";
   }
 
+  // what was typed, as an id of this setting (undefined when it is not one): a number for an integer id, any text for a string
+  function typedId() {
+    const text = input.value.trim();
+    if (kind === "string") return text === "" ? undefined : text;
+    return /^-?\d+$/.test(text) && Number.isSafeInteger(Number(text)) ? Number(text) : undefined;
+  }
+
+  // "add as typed": for a setting that takes an id the source does not know too, always on top, whatever was found
+  function renderCustom() {
+    const host = menu.querySelector(".pick-custom-host");
+    host.replaceChildren();
+    const id = f.custom ? typedId() : undefined;
+    if (id === undefined) return;
+    const already = ids.includes(id);
+    const row = el("div", { className: "pick-custom", role: "button", tabIndex: -1 }, icon("plus"), el("span", { textContent: already ? "“" + id + "” is already added" : "Add “" + id + "” as typed" }));
+    if (already || (multi && full())) {
+      row.setAttribute("aria-disabled", "true");
+    } else {
+      row.onpointerdown = (ev) => ev.preventDefault(); // the input keeps its focus
+      row.onclick = () => addCustom();
+    }
+    host.append(row);
+  }
+
+  function addCustom() {
+    const id = typedId();
+    if (id === undefined || ids.includes(id) || (multi && full())) return;
+    ids = multi ? [...ids, id] : [id];
+    if (f.type === "set") ids.sort(order);
+    input.value = "";
+    close();
+    render();
+    onChange(value());
+    resolve(); // the source may know it after all: the name is then shown
+  }
+
   function renderMenu() {
     if (!menu) return;
-    const view = menu.firstChild;
+    const view = menu.querySelector(".select-viewport");
     view.replaceChildren();
+    renderCustom();
     results.forEach((e, i) => {
       const chosen = ids.includes(e.id);
       const row = el("div", { className: "pick-item" + (i === active ? " active" : ""), role: "option", id: "pick-" + f.key + "-" + i },
@@ -844,7 +888,7 @@ function Picker(f, onChange) {
   const onScroll = (e) => { if (menu && !menu.contains(e.target)) close(); };
   function open() {
     if (menu || input.disabled) return;
-    menu = el("div", { className: "select-content", role: "listbox" }, el("div", { className: "select-viewport" }));
+    menu = el("div", { className: "select-content", role: "listbox" }, el("div", { className: "pick-custom-host" }), el("div", { className: "select-viewport" }));
     document.body.append(menu);
     menu.addEventListener("scroll", () => { if (menu.scrollTop + menu.clientHeight >= menu.scrollHeight - 48) loadMore(); });
     input.setAttribute("aria-expanded", "true");
@@ -888,7 +932,7 @@ function Picker(f, onChange) {
 
   input.addEventListener("focus", open);
   input.addEventListener("click", open);
-  input.addEventListener("input", () => { if (!menu) open(); else search(250); });
+  input.addEventListener("input", () => { if (!menu) open(); else { renderMenu(); search(250); } }); // "add as typed" follows every key, the search waits
   input.addEventListener("keydown", (e) => {
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
@@ -896,7 +940,10 @@ function Picker(f, onChange) {
       if (e.key === "ArrowDown" && active === results.length - 1 && more) return loadMore(); // the end of what is read: the next page, not the top
       if (results.length) { active = (active + (e.key === "ArrowDown" ? 1 : -1) + results.length) % results.length; renderMenu(); menu.querySelector(".active")?.scrollIntoView({ block: "nearest" }); }
     } else if (e.key === "Enter") {
-      if (menu && active >= 0 && results[active]) { e.preventDefault(); choose(results[active]); }
+      if (!menu) return;
+      if ((e.ctrlKey || e.metaKey) && f.custom) { e.preventDefault(); addCustom(); } // the typed one, whatever was found
+      else if (active >= 0 && results[active]) { e.preventDefault(); choose(results[active]); }
+      else if (f.custom && state === "idle" && typedId() !== undefined) { e.preventDefault(); addCustom(); } // nothing found: the typed one
     } else if (e.key === "Escape") {
       if (menu) { e.preventDefault(); close(); }
     } else if (e.key === "Tab") close();

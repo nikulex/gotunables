@@ -31,6 +31,9 @@ type Item[ID comparable] struct {
 //		Voters []uint             `tune:"source:users"` // in this order
 //	}
 //
+// An id the source does not know can be added by hand too with `custom:true` (a chat that is not in the list yet): the
+// page then offers "add as typed", and such an id is not checked against Get.
+//
 // The id type of the source is the type of the setting (or of an item of it): int, uint or string, of any size.
 type DataSource[ID comparable] struct {
 	// Search finds the entries that match what was typed: at most limit of them, after the first offset ones, in the same
@@ -164,7 +167,7 @@ func canonOf(id any) any {
 // verify checks that every id a setting is about to hold exists in its source. Only a write is checked: a saved id
 // whose entry was deleted later stays (the page shows it as not found), it does not break the program.
 func (c *core) verify(f *field, v any) error {
-	if f.source == "" || v == nil {
+	if f.source == "" || f.custom || v == nil { // a custom id is the person's word, the source may not know it
 		return nil
 	}
 	var canon []any

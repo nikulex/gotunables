@@ -53,6 +53,7 @@ type field struct {
 	minLen, maxLen *int   // a list or a set: how many items
 
 	source string // the DataSource the ids come from (the item's, for a list or a set)
+	custom bool   // an id the source does not know may be added too (tune:"custom:true"): it is not checked against the source
 	ptr    bool   // a *T: one entry or none (nil); typ is then T
 }
 
@@ -76,7 +77,7 @@ type tune struct {
 
 // parseTune parses `tune:"name:Max items; desc:Cart size; default:10; min:1; max:100"`.
 // Options are separated by ";", each is key:value. Known keys: key, name, desc, default, enum, min, max, ui, precision,
-// minlen, maxlen, source.
+// minlen, maxlen, source, custom.
 // `tune:"-"` skips the field.
 func parseTune(sf reflect.StructField) (tune, error) {
 	v, ok := sf.Tag.Lookup("tune")
@@ -98,9 +99,9 @@ func parseTune(sf reflect.StructField) (tune, error) {
 		}
 		k = strings.ToLower(strings.TrimSpace(k))
 		switch k {
-		case "key", "name", "desc", "default", "enum", "min", "max", "ui", "precision", "minlen", "maxlen", "source":
+		case "key", "name", "desc", "default", "enum", "min", "max", "ui", "precision", "minlen", "maxlen", "source", "custom":
 		default:
-			return tune{}, fmt.Errorf("unknown tune option %q (known: key, name, desc, default, enum, min, max, ui, precision, minlen, maxlen, source)", k)
+			return tune{}, fmt.Errorf("unknown tune option %q (known: key, name, desc, default, enum, min, max, ui, precision, minlen, maxlen, source, custom)", k)
 		}
 		t.opts[k] = strings.TrimSpace(val)
 	}
@@ -399,6 +400,16 @@ func newField(sf reflect.StructField, key string, index []int, tag tune) (*field
 		return nil, fmt.Errorf("minlen is greater than maxlen")
 	}
 
+	if c, ok := tag.opts["custom"]; ok {
+		on, err := strconv.ParseBool(c)
+		if err != nil {
+			return nil, fmt.Errorf("custom must be true or false, got %q", c)
+		}
+		if on && f.source == "" {
+			return nil, fmt.Errorf("custom goes with source")
+		}
+		f.custom = on
+	}
 	if f.source != "" {
 		if k := target.kind; k != kindInt && k != kindUint && k != kindString {
 			return nil, fmt.Errorf("source is only for ids: an integer or a string, not %s", k)

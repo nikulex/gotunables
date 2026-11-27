@@ -32,6 +32,7 @@
 //	min,max  bounds of a number; durations like min:10ms (for a list or a set: of each item)
 //	minlen,maxlen  how many items a list or a set may hold
 //	source   the DataSource the ids are picked from (registered with WithSource)
+//	custom   with source: an id the source does not know may be added by hand (custom:true)
 //
 // `tune:"-"` skips a field.
 package tunables

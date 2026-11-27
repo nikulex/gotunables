@@ -58,7 +58,12 @@ type field struct {
 }
 
 // group is a nested struct that has a display name or description.
-type group struct{ key, name, desc string }
+type group struct {
+	key, name, desc string
+	rule            bool // a Rule: its two sets (Only, Except) are drawn side by side in one card
+	collapsed       bool // the page shows it folded until someone opens it (tune:"collapsed:true")
+	feature         bool // a Feature: its rules are added from a list, and hidden while it is off
+}
 
 func (f *field) collection() bool { return f.elem != nil }
 
@@ -77,7 +82,7 @@ type tune struct {
 
 // parseTune parses `tune:"name:Max items; desc:Cart size; default:10; min:1; max:100"`.
 // Options are separated by ";", each is key:value. Known keys: key, name, desc, default, enum, min, max, ui, precision,
-// minlen, maxlen, source, custom.
+// minlen, maxlen, source, custom, collapsed and flatten (groups only).
 // `tune:"-"` skips the field.
 func parseTune(sf reflect.StructField) (tune, error) {
 	v, ok := sf.Tag.Lookup("tune")
@@ -99,9 +104,9 @@ func parseTune(sf reflect.StructField) (tune, error) {
 		}
 		k = strings.ToLower(strings.TrimSpace(k))
 		switch k {
-		case "key", "name", "desc", "default", "enum", "min", "max", "ui", "precision", "minlen", "maxlen", "source", "custom":
+		case "key", "name", "desc", "default", "enum", "min", "max", "ui", "precision", "minlen", "maxlen", "source", "custom", "collapsed", "flatten":
 		default:
-			return tune{}, fmt.Errorf("unknown tune option %q (known: key, name, desc, default, enum, min, max, ui, precision, minlen, maxlen, source, custom)", k)
+			return tune{}, fmt.Errorf("unknown tune option %q (known: key, name, desc, default, enum, min, max, ui, precision, minlen, maxlen, source, custom, collapsed, flatten)", k)
 		}
 		t.opts[k] = strings.TrimSpace(val)
 	}
@@ -136,13 +141,17 @@ type walker struct {
 // declaration order. Defaults are the values already in v; a `default` option overrides (and is written into v).
 func walkFields(t reflect.Type, v reflect.Value) ([]*field, []*group, error) {
 	w := &walker{seen: map[string]bool{}}
-	if err := w.walk(t, v, "", nil, 0); err != nil {
+	if err := w.walk(t, v, "", nil, 0, nil); err != nil {
 		return nil, nil, err
 	}
 	return w.fields, w.groups, nil
 }
 
-func (w *walker) walk(t reflect.Type, v reflect.Value, prefix string, index []int, depth int) error {
+// inheritedOptions are the options of a KindRule's tag that its two sets take over: they describe the values, which are
+// the same for both.
+var inheritedOptions = []string{"enum", "min", "max", "precision", "minlen", "maxlen", "source", "custom"}
+
+func (w *walker) walk(t reflect.Type, v reflect.Value, prefix string, index []int, depth int, inherit map[string]string) error {
 	for i := 0; i < t.NumField(); i++ {
 		sf := t.Field(i)
 		embeddedStruct := sf.Anonymous && sf.Type.Kind() == reflect.Struct
@@ -160,6 +169,18 @@ func (w *walker) walk(t reflect.Type, v reflect.Value, prefix string, index []in
 		name, skip := fieldName(sf, tag)
 		if skip {
 			continue
+		}
+		if f, ok := tag.opts["flatten"]; ok { // a struct whose fields are the ones of the struct around it: one level less
+			on, err := strconv.ParseBool(f)
+			if err != nil {
+				return fmt.Errorf("tunables: field %s: flatten must be true or false, got %q", where, f)
+			}
+			if on && sf.Type.Kind() != reflect.Struct {
+				return fmt.Errorf("tunables: field %s: flatten is only for a struct", where)
+			}
+			if on {
+				name = ""
+			}
 		}
 		if strings.Contains(name, ".") {
 			return fmt.Errorf("tunables: field %s: name %q must not contain a dot", where, name)
@@ -179,14 +200,42 @@ func (w *walker) walk(t reflect.Type, v reflect.Value, prefix string, index []in
 				if gname == "" {
 					gname = humanize(name)
 				}
-				w.groups = append(w.groups, &group{key: key, name: gname, desc: tag.opts["desc"]})
+				kind := kindOf(sf.Type)
+				collapsed := false
+				if c, ok := tag.opts["collapsed"]; ok {
+					var err error
+					if collapsed, err = strconv.ParseBool(c); err != nil {
+						return fmt.Errorf("tunables: field %s: collapsed must be true or false, got %q", key, c)
+					}
+				}
+				w.groups = append(w.groups, &group{key: key, name: gname, desc: tag.opts["desc"], rule: kind == kindRule, collapsed: collapsed, feature: kind == kindFeature})
 			}
-			if err := w.walk(sf.Type, fv, key, idx, inner); err != nil {
+			next := inherit
+			if kindOf(sf.Type) == kindRule {
+				next = map[string]string{}
+				for _, k := range inheritedOptions {
+					if val, ok := tag.opts[k]; ok {
+						next[k] = val
+					}
+				}
+			}
+			if err := w.walk(sf.Type, fv, key, idx, inner, next); err != nil {
 				return err
 			}
 			continue
 		}
 
+		if _, ok := tag.opts["collapsed"]; ok {
+			return fmt.Errorf("tunables: field %s: collapsed is only for a group (a struct), the page folds those", key)
+		}
+		for k, val := range inherit { // the options of the Rule the set belongs to; its own come first
+			if tag.opts == nil {
+				tag.opts = map[string]string{}
+			}
+			if _, ok := tag.opts[k]; !ok {
+				tag.opts[k] = val
+			}
+		}
 		f, err := newField(sf, key, idx, tag)
 		if err != nil {
 			return fmt.Errorf("tunables: field %s: %w", key, err)

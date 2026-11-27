@@ -57,6 +57,8 @@ convention used by the demo (and what tuneboard will suggest for a new source).
   | `minlen`, `maxlen` | how many items a list or a set may hold (at most 1000 anyway) |
   | `source` | the data source the ids are picked from (see "Picking from existing data") |
   | `custom` | with `source`: `custom:true` lets an id the source does not know be added by hand too |
+  | `collapsed` | on a nested struct only: `collapsed:true` shows the group folded until someone opens it (the page remembers what they chose, by source). A folded group still tells that something in it is not saved, and a folded Rule says what it holds: "only rs, ua · except safari" |
+  | `flatten` | on a nested struct only: `flatten:true` makes its fields the ones of the struct around it, one level less (a Feature does it for its targeting) |
   | `key` | the key segment instead of the json/yaml name |
   | `precision` | digits shown after the point of a float (0 to 10): `precision:2` draws `0.20` and `1.00`, so the number never changes width. Default: as many as the step has |
   | `ui` | the component that edits the field; the first one is the default: bool `switch` or `checkbox`, enum `select` or `buttons`, number `counter`, `slider` (needs `min` and `max`) or `input`, string `input` or `textarea`, duration `input` |
@@ -105,6 +107,62 @@ convention used by the demo (and what tuneboard will suggest for a new source).
   or `Reset` makes a `*T` nobody. The demo picks users of a public test API (`go run ./demo`, page People).
 - `Get()` returns an immutable snapshot. `Set(key, value)` / `Reset(key)` do what the UI does.
 
+## Features and targeting
+
+A `tunables.Feature[T]` is a setting with a switch (`enabled`) and a **targeting** `T`: a struct of `tunables.Rule`s that
+say for whom it is on. A `Rule[V]` is two sets, `Include` ("only these", empty: everybody) and `Exclude` ("all but
+these", wins over `Include`); the options of its tag (`enum`, `source`, `custom`, `minlen`...) are the options of both.
+You declare the targeting yourself, as a struct of Rules, and the info it is checked against, as a struct with a field of
+the same name for each Rule:
+
+```go
+type Targeting struct {
+    Country  tunables.Rule[string] `json:"country" tune:"name:Country; desc:Where from"`
+    Provider tunables.Rule[string] `json:"provider" tune:"enum:google,telegram,email"`
+    UserID   tunables.Rule[uint]   `json:"users" tune:"name:People; source:users"`
+}
+type Info struct {
+    Country  string
+    Provider string
+    UserID   uint
+}
+type Config struct {
+    Features struct {
+        NewCheckout tunables.Feature[Targeting] `json:"new_checkout" tune:"name:New checkout"`
+    } `json:"features"`
+}
+
+m, err := tunables.NewMatcher[Targeting, Info]() // once, at the start
+...
+info := Info{Country: "rs", Provider: "google", UserID: 7}
+if m.On(&t.Get().Features.NewCheckout, &info) { ... } // enabled, and the info is in the targeting
+```
+
+- **The page.** The rules sit right in the feature (`features.new_checkout.country.include`), each as one card with
+  **Only** and **Except** side by side. Only the rules that hold something are shown: the others are added from a dialog
+  (**Add targeting**, always under the rules: the names and descriptions of the rules, with a search) and taken away
+  with the cross of their card, which empties them. A feature that is off has its targeting folded away, at once when
+  the switch is turned, before it is saved.
+- **The info.** Each Rule reads the field of the info with its name: a value of the Rule's type, or a slice of them (the
+  languages of a browser: one has to be in, none may be out). A field that holds nothing (an empty text, 0) is *unknown*:
+  a Rule that names who is in does not match it, one that only names who is out does. Embedded structs work as in Go,
+  which is how an info is extended.
+- **The check, both ways.** `tunables.CheckInfo[Targeting, Info]()` (a `Matcher` does it when it is made) fails for a Rule
+  that the info has no field for, a field of another type, and for a field of the info that no Rule is for: a field that
+  is not meant for targeting says so with the tag `target:"-"`. A Rule that finds nothing silently does nothing, and this
+  is what tells.
+- **Speed.** What reflection is needed (where each Rule and its field are, by offset) is worked out once. A
+  `Matcher[T, I]` then checks with no reflection and no allocation, as plain Go code of the types of the Rules (the
+  info goes by a pointer). `feature.On(info any)` does not need a Matcher: it finds the plan of the two types by itself,
+  once (the reflection is cached), and costs a lookup, and a copy of the info unless it is a pointer. A Matcher cannot
+  follow an embedded *pointer* (embed the struct itself); `On` reads those by reflection.
+
+### HTTP targeting: `httptargeting`
+
+The targeting of a web request (the place of the address, the languages, the browser, the system, the kind of device) is
+a module of its own, `github.com/nikulex/gotunables/httptargeting`, so that this one has no dependencies: see its README. Its
+`Info` and `Targeting` work with `Feature` and `Matcher` as any you declare yourself, and are embedded into your own to extend them.
+
 ## Storage
 
 Without a store, changes live in memory. A store keeps **the struct itself**:
@@ -148,7 +206,7 @@ type Store interface {
 |---|---|
 | `GET /` | the UI: one embedded HTML file, no build, works on phones. Click a group's heading to open it on its own page (`#/checkout.button`) with the breadcrumbs in the navbar (every parent is a link). Edits are collected (the changed fields get an orange *); a sticky header shows **Save** (Ctrl/Cmd+S) and **Discard** while there are any |
 | `GET /meta` | `{"name", "description", "protocol": 1}` |
-| `GET /schema` | `{"groups": [{key, name, desc}], "fields": [{key, name, type, ui, desc, default, value, modified, enum, min, max, precision}]}`; a field with `source` has `ui: "picker"` and the name of the source, one that may be nobody has `optional: true` and a `null` value; a list or a set has `type: "list"\|"set"` and `item` (the type of an item; `enum`, `min`, `max`, `precision` are the item's), `minlen`, `maxlen`, and its `value` is an array | |
+| `GET /schema` | `{"groups": [{key, name, desc, rule, feature, collapsed}], "fields": [{key, name, type, ui, desc, default, value, modified, enum, min, max, precision}]}`; a field with `source` has `ui: "picker"` and the name of the source, one that may be nobody has `optional: true` and a `null` value; a list or a set has `type: "list"\|"set"` and `item` (the type of an item; `enum`, `min`, `max`, `precision` are the item's), `minlen`, `maxlen`, and its `value` is an array | |
 | `PUT /values/{key}` | body `{"value": ...}` (`null` for a `*T` with nobody), returns the updated field |
 | `GET /sources/{name}/search?q=&limit=&offset=` | the entries of a data source that match: `{"items": [{id, name, image}], "more": bool}`; `limit` 1 to 50, default 20; the page reads further ones as the list is scrolled |
 | `GET /sources/{name}/items?id=&id=` | the entries of these ids (up to 100), the ones that exist: `{"items": [...]}` |

@@ -52,6 +52,29 @@ button,input,textarea{font-family:inherit}
 .select-indicator{position:absolute;right:8px;display:flex;width:14px;height:14px;align-items:center;justify-content:center}
 .select-indicator svg{width:16px;height:16px}
 
+/* ---- a feature: its rules are added from a list; while it is off they are folded away ---- */
+.feature-add{margin-top:12px}
+.feature-add-button svg{width:16px;height:16px;margin-right:6px}
+.group.feature.off>.group,.group.feature.off>.feature-add,.page.feature.off>.group:not(:first-child),.page.feature.off>.feature-add{display:none}
+
+/* ---- Dialog: a list to pick from over the page ---- */
+.dialog-overlay{position:fixed;inset:0;z-index:60;display:flex;align-items:flex-start;justify-content:center;padding:10vh 16px 16px;background:rgb(0 0 0/.5);animation:select-in .15s ease-out}
+.dialog{position:relative;display:flex;flex-direction:column;gap:16px;width:100%;max-width:32rem;max-height:80vh;border:1px solid hsl(var(--border));border-radius:var(--radius);background:hsl(var(--background));color:hsl(var(--foreground));padding:24px;box-shadow:var(--shadow-md)}
+.dialog-head h2{margin:0;padding-right:32px;font-size:18px;line-height:28px;font-weight:600;letter-spacing:-.025em}
+.dialog-head p{margin:4px 0 0;font-size:14px;line-height:20px;color:hsl(var(--muted-foreground))}
+.dialog-close{position:absolute;top:16px;right:16px;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:0;border-radius:calc(var(--radius) - 4px);background:transparent;color:hsl(var(--muted-foreground));cursor:pointer}
+.dialog-close:hover{background:hsl(var(--accent));color:hsl(var(--accent-foreground))}
+.dialog-close:focus-visible{outline:none;box-shadow:0 0 0 1px hsl(var(--ring))}
+.dialog-close svg{width:16px;height:16px}
+.dialog-list{display:flex;flex-direction:column;gap:2px;min-height:0;overflow-y:auto;margin:0 -8px;padding:0 8px}
+.dialog-item{display:flex;flex-direction:column;gap:2px;border-radius:calc(var(--radius) - 4px);padding:8px 12px;cursor:pointer;user-select:none}
+.dialog-item.active,.dialog-item:hover{background:hsl(var(--accent));color:hsl(var(--accent-foreground))}
+.dialog-item-name{font-size:14px;line-height:20px;font-weight:500}
+.dialog-item-desc{font-size:12px;line-height:16px;color:hsl(var(--muted-foreground))}
+.group-remove{margin-left:auto}
+.group-remove+.group-toggle{margin-left:0}
+@media (max-width:640px){.dialog-overlay{padding:6vh 8px 8px}.dialog{padding:16px}}
+
 /* ---- Switch, Checkbox, Radio group ---- */
 .switch{display:inline-flex;flex:none;width:48px;height:28px;align-items:center;border:2px solid transparent;border-radius:9999px;padding:0;background:hsl(var(--input));cursor:pointer;transition:background-color .15s}
 .switch:focus-visible{outline:none;box-shadow:0 0 0 2px hsl(var(--background)),0 0 0 4px hsl(var(--ring))}
@@ -100,7 +123,10 @@ button,input,textarea{font-family:inherit}
 /* ---- Picker: entries of a data source, chosen as chips, searched in an input with a list under it ---- */
 .picker{display:flex;flex-direction:column;align-items:flex-start;gap:10px;width:100%}
 .picker-input{width:100%;max-width:24rem}
-.avatar{display:inline-flex;flex:none;align-items:center;justify-content:center;width:24px;height:24px;border-radius:9999px;background:hsl(var(--muted));color:hsl(var(--muted-foreground));font-size:11px;line-height:1;font-weight:600;object-fit:cover;overflow:hidden}
+.avatar{display:inline-flex;flex:none;align-items:center;justify-content:center;width:24px;height:24px;border-radius:9999px;background:hsl(var(--muted));color:hsl(var(--muted-foreground));font-size:11px;line-height:1;font-weight:600;object-fit:cover;overflow:hidden;outline:1px solid hsl(var(--border));outline-offset:-1px}
+/* a name without a picture is its first letter on a colour of its own (from the name), clear of the grey of a chip or of a row under the pointer */
+.avatar.letter{--h:210;background:hsl(var(--h) 55% 88%);color:hsl(var(--h) 60% 26%);outline-color:hsl(var(--h) 40% 76%)}
+@media (prefers-color-scheme:dark){.avatar.letter{background:hsl(var(--h) 35% 26%);color:hsl(var(--h) 70% 86%);outline-color:hsl(var(--h) 30% 38%)}}
 .chip.has-avatar{padding-left:3px;gap:6px}
 .chip-sub{color:hsl(var(--muted-foreground));font-weight:400;font-size:12px}
 .chip.missing{color:hsl(var(--muted-foreground));background:hsl(var(--muted));font-weight:400}
@@ -184,6 +210,17 @@ main{max-width:768px;margin:0 auto;padding:32px 24px calc(64px + env(safe-area-i
 .heading{display:flex;align-items:center}
 .depth{display:inline-flex;align-items:center;flex:none;gap:6px;margin-right:12px;color:hsl(var(--muted-foreground));opacity:.55}
 .depth .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+.group-toggle{display:inline-flex;flex:none;align-items:center;justify-content:center;width:28px;height:28px;margin-left:auto;padding:0;border:0;border-radius:calc(var(--radius) - 4px);background:transparent;color:hsl(var(--muted-foreground));cursor:pointer}
+.group-toggle:hover{background:hsl(var(--accent));color:hsl(var(--accent-foreground))}
+.group-toggle:focus-visible{outline:none;box-shadow:0 0 0 1px hsl(var(--ring))}
+.group-toggle svg{width:16px;height:16px;transition:transform .15s}
+.group.collapsed>.group-head .group-toggle svg{transform:rotate(-90deg)}
+.group.collapsed>.card,.group.collapsed>.rows,.group.collapsed>.group{display:none}
+.group.collapsed>.group-head{margin-bottom:0}
+.group.rule.collapsed>.group-head p{display:none}
+.group-summary{min-width:0;margin-left:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:hsl(var(--muted-foreground));font-size:14px;font-weight:400;letter-spacing:0}
+.group:not(.collapsed)>.group-head .group-summary{display:none}
+.group.collapsed.dirty>.group-head .heading-link::after{content:"*";margin-left:2px;color:hsl(var(--orange));font-weight:700}
 .heading-link{display:inline-flex;align-items:center;gap:6px;color:inherit;text-decoration:none}
 .heading-link svg{width:.7em;height:.7em;flex:none;opacity:.35;transition:opacity .15s,transform .15s}
 .heading-link:hover svg,.heading-link:focus-visible svg{opacity:1;transform:translateX(2px)}
@@ -192,6 +229,10 @@ main{max-width:768px;margin:0 auto;padding:32px 24px calc(64px + env(safe-area-i
 
 .field{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:68px;padding:14px 20px;box-shadow:inset 0 1px 0 hsl(var(--border))}
 .card>.field:first-child{box-shadow:none}
+.card.rule{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)} /* a Rule of a targeting: Only | Except */
+.card.rule>.field{box-shadow:none}
+.card.rule .ctl{align-items:flex-start} /* side by side: the taller column does not centre the other's content */
+.card.rule>.field+.field{box-shadow:inset 1px 0 0 hsl(var(--border))}
 .rows>.field{padding:12px 0;box-shadow:none} /* the fields of the root have no card around them */
 
 .field-block{flex-direction:column;align-items:stretch;gap:8px;min-height:0}
@@ -246,6 +287,8 @@ main{max-width:768px;margin:0 auto;padding:32px 24px calc(64px + env(safe-area-i
   .w-slider{width:auto;flex:1 1 0;min-width:0}
   .field-block .field-text{flex:none}
   .field-block .ctl{flex:1}
+  .card.rule{grid-template-columns:minmax(0,1fr)}
+  .card.rule>.field+.field{box-shadow:inset 0 1px 0 hsl(var(--border))}
 }
 </style>
 </head>
@@ -276,6 +319,8 @@ let authShown = false;
 let saving = false;
 let groupMeta = new Map();
 const rows = new Map();    // key -> {el, apply(field), discard(), fail(message)}
+const groupEls = new Map(); // group key -> {section, node, summary}: what can be folded and told about
+const featureEls = [];     // {section, node} of the features on the page: folded while they are off
 const pending = new Map(); // key -> edited, not yet saved value
 
 function el(tag, props, ...kids) {
@@ -657,7 +702,14 @@ const entryKey = (source, id) => source + "\u0000" + id;
 const safeImage = (src) => (/^(https:\/\/|data:image\/)/i.test(src || "") ? src : "");
 
 function Avatar(entry) {
-  const fallback = () => el("span", { className: "avatar", textContent: ([...(entry.name || "")][0] || "#").toUpperCase() });
+  const fallback = () => {
+    const name = entry.name || "";
+    let h = 0; // the colour is the name's: the same one every time
+    for (const c of name + String(entry.id)) h = (h * 31 + c.codePointAt(0)) % 360;
+    const e = el("span", { className: "avatar letter", textContent: ([...name][0] || "#").toUpperCase() });
+    e.style.setProperty("--h", h);
+    return e;
+  };
   const src = safeImage(entry.image);
   if (!src) return fallback();
   const img = el("img", { className: "avatar", src, alt: "", width: 24, height: 24, loading: "lazy", referrerPolicy: "no-referrer" });
@@ -1043,6 +1095,7 @@ function updateBar() {
   const dirty = pending.size > 0;
   $("actions").hidden = !dirty;
   for (const b of $("actions").querySelectorAll("button")) b.disabled = saving;
+  updateGroupMarks();
 }
 
 function tree(fields) {
@@ -1067,27 +1120,232 @@ function depthMarker(level) {
   return [m];
 }
 
+// Which groups are folded: what the struct tag says, until the person opens or folds one (kept in the browser, by source).
+const collapseKey = (key) => ((lastData && lastData.meta && lastData.meta.name) || "") + "/" + key;
+function storedFolds() {
+  try { return JSON.parse(localStorage.getItem("tunables-collapsed") || "{}"); } catch { return {}; }
+}
+function isCollapsed(key, meta) {
+  const stored = storedFolds()[collapseKey(key)];
+  return stored === undefined ? !!meta.collapsed : !!stored;
+}
+function setCollapsed(key, value) {
+  const all = storedFolds();
+  all[collapseKey(key)] = value;
+  try { localStorage.setItem("tunables-collapsed", JSON.stringify(all)); } catch { /* a browser that keeps nothing: it is folded for this visit */ }
+}
+
+// What a folded Rule says in its heading: "only rs, ua · except safari".
+function ruleSummary(node) {
+  const values = (name) => {
+    const r = node.rows.find((x) => x.name === name);
+    if (!r) return [];
+    const v = pending.has(r.f.key) ? pending.get(r.f.key) : r.f.value;
+    return Array.isArray(v) ? v : [];
+  };
+  const some = (a) => (a.length > 3 ? a.slice(0, 3).join(", ") + ", +" + (a.length - 3) : a.join(", "));
+  const parts = [];
+  const only = values("include");
+  const except = values("exclude");
+  if (only.length) parts.push("only " + some(only));
+  if (except.length) parts.push("except " + some(except));
+  return parts.join(" · ");
+}
+
+// A folded group still tells that something in it is not saved (an orange * after its name) and what a Rule holds.
+function updateGroupMarks() {
+  const unsaved = [...pending.keys()];
+  for (const g of groupEls.values()) {
+    g.section.classList.toggle("dirty", unsaved.some((k) => k.startsWith(g.node.key + ".")));
+    if (g.summary) g.summary.textContent = ruleSummary(g.node);
+  }
+  // a feature that is off has its targeting folded: nothing is asked of who it is for
+  for (const g of featureEls) {
+    const r = g.node.rows.find((x) => x.name === "enabled");
+    const on = r ? (pending.has(r.f.key) ? pending.get(r.f.key) : r.f.value) : true;
+    g.section.classList.toggle("off", !on);
+  }
+}
+
+// Opens the folded groups around a field, to show what is wrong with it.
+function revealGroups(key) {
+  for (const g of groupEls.values()) {
+    if (key.startsWith(g.node.key + ".") && g.section.classList.contains("collapsed")) g.section.querySelector(".group-toggle").click();
+  }
+}
+
 // Groups nest as they do in the struct (up to 3 levels): a heading, a card with its fields, then its subgroups.
 // The hierarchy is the size of the heading and the faint "child of" dots before it; breadcrumbs are only at the top of a group's page.
-function renderGroup(node, level, name) {
+function renderGroup(node, level, name, inFeature = false) {
   const meta = groupMeta.get(node.key) || {};
   const title = meta.name || name;
-  const section = el("section", { className: "group level-" + Math.min(level, 3) });
+  const section = el("section", { className: "group level-" + Math.min(level, 3) + (meta.rule ? " rule" : "") + (meta.feature ? " feature" : "") });
   if (level > 0) {
     const link = el("a", { className: "heading-link", href: "#/" + encodeURIComponent(node.key), title: "Open " + title }, title, icon("chevronRight"));
-    const heading = el("h" + Math.min(level + 1, 4), { className: "heading" }, ...depthMarker(level), link);
+    // a group can be folded: by what its struct tag says (collapsed), until someone opens or folds it, which the browser remembers
+    const folded = isCollapsed(node.key, meta);
+    section.classList.toggle("collapsed", folded);
+    const toggle = el("button", { type: "button", className: "group-toggle", ariaExpanded: String(!folded), ariaLabel: (folded ? "Expand " : "Collapse ") + title }, icon("chevronDown"));
+    toggle.onclick = () => {
+      const now = !section.classList.contains("collapsed");
+      section.classList.toggle("collapsed", now);
+      toggle.setAttribute("aria-expanded", String(!now));
+      toggle.setAttribute("aria-label", (now ? "Expand " : "Collapse ") + title);
+      setCollapsed(node.key, now);
+    };
+    const summary = meta.rule ? el("span", { className: "group-summary" }) : null; // what a folded Rule holds
+    groupEls.set(node.key, { section, node, summary });
+    // a Rule of a feature is added from a list: here it is taken away again (what it held is emptied, saved with the rest)
+    const remove = meta.rule && inFeature ? el("button", { type: "button", className: "group-toggle group-remove", ariaLabel: "Remove " + title, title: "Remove" }, icon("luX")) : null;
+    if (remove) remove.onclick = () => removeRule(node);
+    const heading = el("h" + Math.min(level + 1, 4), { className: "heading" }, ...depthMarker(level), link, ...(summary ? [summary] : []), ...(remove ? [remove] : []), toggle);
     const head = el("div", { className: "group-head" }, heading);
     if (meta.desc) head.append(el("p", { textContent: meta.desc }));
     section.append(head);
   }
   if (node.rows.length) section.append(rowsCard(node, level === 0));
-  for (const [childName, child] of node.groups) section.append(renderGroup(child, level + 1, childName));
+  if (meta.feature) featureEls.push({ section, node });
+  appendChildren(section, node, level + 1, meta);
   return section;
+}
+
+// The subgroups of a group. A feature shows the rules that hold something, or were added: the others are added from a list.
+function appendChildren(parent, node, level, meta) {
+  for (const [childName, child] of node.groups) {
+    const rule = (groupMeta.get(child.key) || {}).rule;
+    if (meta.feature && rule && !isRuleActive(child)) continue;
+    parent.append(renderGroup(child, level, childName, !!meta.feature));
+  }
+  if (meta.feature) { // under the rules, always
+    const add = featureAdd(node);
+    if (add) parent.append(add);
+  }
+}
+
+// ---- the rules of a feature: added from a list in a dialog ----
+const shownRules = new Set(); // the rules added in this visit that hold nothing yet
+
+const ruleValues = (node, name) => {
+  const r = node.rows.find((x) => x.name === name);
+  if (!r) return [];
+  const v = pending.has(r.f.key) ? pending.get(r.f.key) : r.f.value;
+  return Array.isArray(v) ? v : [];
+};
+const isRuleActive = (node) => shownRules.has(node.key) || ruleValues(node, "include").length > 0 || ruleValues(node, "exclude").length > 0;
+
+function featureAdd(node) {
+  const available = () => [...node.groups.values()].filter((c) => (groupMeta.get(c.key) || {}).rule && !isRuleActive(c));
+  if (available().length === 0 && ![...node.groups.values()].some((c) => (groupMeta.get(c.key) || {}).rule)) return null;
+  const button = Button({ variant: "outline", size: "sm", className: "feature-add-button", type: "button" }, icon("plus"), el("span", { textContent: "Add targeting" }));
+  button.onclick = () => {
+    const list = available();
+    openDialog({
+      title: "Add targeting",
+      description: "Who the feature is on for: a targeting is added with what it lets in and what it keeps out.",
+      searchPlaceholder: "Search the targetings…",
+      empty: "All the targetings are added.",
+      opener: button,
+      items: list.map((c) => {
+        const m = groupMeta.get(c.key) || {};
+        return { key: c.key, name: m.name || c.key.split(".").pop(), desc: m.desc || "" };
+      }),
+      onPick: (it) => {
+        shownRules.add(it.key);
+        rebuild();
+        const g = groupEls.get(it.key);
+        if (g) {
+          if (g.section.classList.contains("collapsed")) g.section.querySelector(".group-toggle:not(.group-remove)").click();
+          g.section.scrollIntoView({ block: "center", behavior: "smooth" });
+        }
+      },
+    });
+  };
+  const host = el("div", { className: "feature-add" }, button);
+  return host;
+}
+
+function removeRule(node) {
+  for (const name of ["include", "exclude"]) {
+    const r = node.rows.find((x) => x.name === name);
+    const row = r && rows.get(r.f.key);
+    if (row && ruleValues(node, name).length) row.set([]);
+  }
+  shownRules.delete(node.key);
+  rebuild();
+}
+
+// Draws the page again from what it has (what is shown depends on more than the schema), keeping the unsaved edits.
+function rebuild() {
+  signature = null;
+  show(lastData.meta, lastData.schema);
+}
+
+// A dialog with a list to pick from, like the ones of the shop: a search, the rows (a name and what it is), Esc or a click outside closes it.
+function openDialog({ title, description, searchPlaceholder, empty, opener, items, onPick }) {
+  const overlay = el("div", { className: "dialog-overlay" });
+  const search = Input({ placeholder: searchPlaceholder || "Search…", autocomplete: "off" });
+  const list = el("div", { className: "dialog-list", role: "listbox" });
+  const close = el("button", { type: "button", className: "dialog-close", ariaLabel: "Close" }, icon("luX"));
+  const panel = el("div", { className: "dialog", role: "dialog", ariaLabel: title },
+    el("div", { className: "dialog-head" }, el("h2", { textContent: title }), ...(description ? [el("p", { textContent: description })] : [])),
+    close, search, list);
+  overlay.append(panel);
+
+  let shown = items;
+  let active = 0;
+  function render() {
+    list.replaceChildren();
+    if (shown.length === 0) list.append(el("div", { className: "pick-note", textContent: items.length === 0 ? empty || "Nothing to add." : "Nothing found" }));
+    shown.forEach((it, i) => {
+      const row = el("div", { className: "dialog-item" + (i === active ? " active" : ""), role: "option" },
+        el("span", { className: "dialog-item-name", textContent: it.name }),
+        ...(it.desc ? [el("span", { className: "dialog-item-desc", textContent: it.desc })] : []));
+      row.setAttribute("aria-selected", String(i === active));
+      row.onclick = () => { done(); onPick(it); };
+      row.onmousemove = (ev) => { if (active !== i && (ev.movementX || ev.movementY)) { active = i; render(); } };
+      list.append(row);
+    });
+    list.querySelector(".active")?.scrollIntoView({ block: "nearest" });
+  }
+  function done() {
+    overlay.remove();
+    document.body.style.overflow = prevOverflow;
+    removeEventListener("keydown", onKey, true);
+    opener?.focus();
+  }
+  function onKey(e) {
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); done(); }
+    else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (shown.length) { active = (active + (e.key === "ArrowDown" ? 1 : -1) + shown.length) % shown.length; render(); }
+    } else if (e.key === "Enter" && shown[active]) { e.preventDefault(); const it = shown[active]; done(); onPick(it); }
+    else if (e.key === "Tab") { // the focus stays in the dialog
+      const focusable = [close, search];
+      const i = focusable.indexOf(document.activeElement);
+      e.preventDefault();
+      focusable[(i + (e.shiftKey ? -1 : 1) + focusable.length) % focusable.length].focus();
+    }
+  }
+  search.oninput = () => {
+    const q = search.value.trim().toLowerCase();
+    shown = q ? items.filter((it) => (it.name + " " + it.desc).toLowerCase().includes(q)) : items;
+    active = 0;
+    render();
+  };
+  close.onclick = done;
+  overlay.addEventListener("pointerdown", (e) => { if (e.target === overlay) done(); });
+  const prevOverflow = document.body.style.overflow;
+  document.body.style.overflow = "hidden";
+  addEventListener("keydown", onKey, true);
+  document.body.append(overlay);
+  render();
+  search.focus();
 }
 
 // The fields of a group go into a card; the ones of the root (no struct around them) are plain rows.
 function rowsCard(node, plain = false) {
-  const card = el("div", { className: plain ? "rows" : "card" });
+  const rule = !plain && (groupMeta.get(node.key) || {}).rule; // a Rule: Only and Except side by side
+  const card = el("div", { className: plain ? "rows" : "card" + (rule ? " rule" : "") });
   for (const r of node.rows) {
     const row = makeRow(r.f.name || r.name, r.f);
     rows.set(r.f.key, row);
@@ -1108,7 +1366,8 @@ function renderPage(node, ancestors) {
   section.append(head);
   if (node.rows.length) section.append(rowsCard(node));
   page.append(section);
-  for (const [childName, child] of node.groups) page.append(renderGroup(child, depth + 1, childName));
+  if (meta.feature) { page.classList.add("feature"); featureEls.push({ section: page, node }); }
+  appendChildren(page, node, depth + 1, meta);
   return page;
 }
 
@@ -1234,7 +1493,7 @@ function makeRow(name, f) {
   }
   setValue(current());
   mark(); // a row built while its edit is still unsaved (another page, a rebuild) shows the star at once
-  return { el: root, apply, discard, fail(msg) { message.textContent = msg || ""; message.hidden = !msg; } };
+  return { el: root, apply, discard, set(v) { setValue(v); stage(v); }, fail(msg) { message.textContent = msg || ""; message.hidden = !msg; } };
 }
 
 async function saveAll() {
@@ -1250,7 +1509,7 @@ async function saveAll() {
         if (row) { row.fail(null); row.apply(next); }
       } catch (e) {
         if (e instanceof AuthError) return;
-        if (row) row.fail(e.message); // stays pending, so Save can be retried after fixing it
+        if (row) { row.fail(e.message); revealGroups(key); } // stays pending, so Save can be retried after fixing it
       }
     }
   } finally {
@@ -1300,13 +1559,18 @@ function show(meta, schema) {
     ], true));
   }
 
-  const sig = JSON.stringify([key, schema.groups, schema.fields.map((f) => [f.key, f.name, f.type, f.ui, f.enum, f.min, f.max, f.desc])]);
+  // the Rules of a feature that hold something (saved) are on the page: a change of those is a change of the page
+  const held = schema.fields.filter((f) => Array.isArray(f.value) && f.value.length && (groupMeta.get(f.key.slice(0, f.key.lastIndexOf("."))) || {}).rule).map((f) => f.key);
+  const sig = JSON.stringify([key, schema.groups, schema.fields.map((f) => [f.key, f.name, f.type, f.ui, f.enum, f.min, f.max, f.desc]), held]);
   if (sig !== signature) { // first render, another page, or the schema changed under us: rebuild, keeping unsaved edits
     signature = sig;
     const keys = new Set(schema.fields.map((f) => f.key));
     for (const k of [...pending.keys()]) if (!keys.has(k)) pending.delete(k);
     rows.clear();
+    groupEls.clear();
+    featureEls.length = 0;
     $("root").replaceChildren(key ? renderPage(node, titles) : renderGroup(root, 0, "", []));
+    updateGroupMarks();
   } else {
     for (const f of schema.fields) {
       const row = rows.get(f.key);

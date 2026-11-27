@@ -221,6 +221,11 @@ func newCore(typ reflect.Type, initial reflect.Value, o options) (*core, error) 
 		}
 		c.sources[s.name] = s
 	}
+	for _, f := range fields { // the sources that imported packages register (RegisterSource), unless the program registered its own under the name
+		if src, ok := registeredSource(f.source); ok && c.sources[f.source] == nil {
+			c.sources[f.source] = src
+		}
+	}
 	for _, f := range fields {
 		if err := c.checkSource(f); err != nil {
 			return nil, fmt.Errorf("tunables: field %s: %w", f.key, err)

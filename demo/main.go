@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -46,6 +48,12 @@ type Features struct {
 		Rotation  []int             `json:"rotation" tune:"source:people; custom:true; desc:The same person may come twice, the order matters. An id that is not in the list can be added too"`
 	} `json:"people" tune:"name:People; desc:Picked from a data source: the users of dummyjson.com"`
 
+	// A feature is on or off, and when it is on, only for those the targeting lets in. The info of a request says who they are.
+	Features struct {
+		NewCheckout tunables.Feature[BaseTargeting] `json:"new_checkout" tune:"name:New checkout; desc:The targeting of the program: where from, what language"`
+		Beta        tunables.Feature[MyTargeting]   `json:"beta" tune:"name:Beta; desc:The same, and the account provider and the people that only this program knows (embedded)"`
+	} `json:"features" tune:"name:Features; desc:Try it: GET /try?country=rs&lang=en&provider=google&user=3 on this address says what is on for you"`
+
 	Retry struct {
 		Count  int `yaml:"count" tune:"default:3; min:0; max:10"`
 		Policy struct {
@@ -55,6 +63,31 @@ type Features struct {
 			} `yaml:"jitter"`
 		} `yaml:"policy"`
 	} `yaml:"retry"`
+}
+
+// The targeting of a feature is a struct of Rules, and what it is checked against (the info) is a struct with a field of the
+// same name for each Rule. The httptargeting package (a module of its own) has the ready ones for a web request.
+type BaseTargeting struct {
+	Country   tunables.Rule[string] `json:"country" tune:"name:Country; desc:Where from; enum:rs,ua,us,id,de"`
+	Languages tunables.Rule[string] `json:"languages" tune:"name:Languages; desc:One of them has to be in; enum:en,sr,uk,ru,de"`
+}
+
+// MyTargeting adds what only this program knows.
+type MyTargeting struct {
+	BaseTargeting
+	Provider tunables.Rule[string] `json:"provider" tune:"name:Account provider; enum:google,telegram,email"`
+	UserID   tunables.Rule[int]    `json:"users" tune:"name:People; source:people; custom:true"`
+}
+
+type BaseInfo struct {
+	Country   string
+	Languages []string
+}
+
+type MyInfo struct {
+	BaseInfo
+	Provider string
+	UserID   int
 }
 
 const name = "demo"
@@ -86,8 +119,38 @@ func main() {
 		}
 	}()
 
+	// A Matcher is made once for each targeting and the info it is checked against, at the start: it finds out whether they go
+	// together (a Rule that finds nothing in the info would silently do nothing), and then checks without reflection.
+	base, err := tunables.NewMatcher[BaseTargeting, BaseInfo]()
+	if err != nil {
+		log.Fatal(err)
+	}
+	beta, err := tunables.NewMatcher[MyTargeting, MyInfo]()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle("/", t.Handler())
+	// what is on for the one who asks: /try?country=rs&lang=en,sr&provider=google&user=3
+	mux.HandleFunc("GET /try", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		info := BaseInfo{Country: q.Get("country")}
+		if l := q.Get("lang"); l != "" {
+			info.Languages = strings.Split(l, ",")
+		}
+		mine := MyInfo{BaseInfo: info, Provider: q.Get("provider")}
+		mine.UserID, _ = strconv.Atoi(q.Get("user"))
+		f := t.Get().Features
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"info":         mine,
+			"new_checkout": base.On(&f.NewCheckout, &info),
+			"beta":         beta.On(&f.Beta, &mine),
+		})
+	})
 	log.Println("settings UI: http://127.0.0.1:6767/")
-	log.Fatal(http.ListenAndServe("127.0.0.1:6767", t.Handler()))
+	log.Fatal(http.ListenAndServe("127.0.0.1:6767", mux))
 }
 
 // people is a data source over a public test API (https://dummyjson.com/users: 208 made-up users with pictures).

@@ -50,7 +50,7 @@ type siteInfo struct {
 }
 
 type siteTargeting struct {
-	Country   Rule[string] `json:"country" tune:"name:Country; desc:Where from"`
+	Country   Rule[string] `json:"country" tune:"name:Country"`
 	Languages Rule[string] `json:"languages"`
 	Provider  Rule[string] `json:"provider" tune:"name:Account provider; enum:google,telegram,email"`
 	UserID    Rule[uint]   `json:"users" tune:"name:People; source:users"`
@@ -75,6 +75,14 @@ type featureConfig struct {
 	} `json:"features"`
 }
 
+// one is the targeting of the only group of a feature (made when there is none yet): a test of the Rules of a feature
+func one[T any](f *Feature[T]) *T {
+	if len(f.Groups) == 0 {
+		f.Groups = append(f.Groups, Group[T]{ID: "g"})
+	}
+	return &f.Groups[0].Targeting
+}
+
 func TestFeatureIsOnForWhoIsInTheTargeting(t *testing.T) {
 	var f Feature[siteTargeting]
 	info := siteInfo{Country: "rs", Languages: []string{"sr", "en"}, Provider: "google", UserID: 7}
@@ -86,29 +94,29 @@ func TestFeatureIsOnForWhoIsInTheTargeting(t *testing.T) {
 	if !f.IsEnabled(info) || !f.IsEnabled(siteInfo{}) || !f.IsEnabled(nil) {
 		t.Error("enabled with no targeting: on for everybody, whatever is known of them")
 	}
-	f.Targeting.Country.Include = NewSet("rs", "ua")
+	one(&f).Country.Include = NewSet("rs", "ua")
 	if !f.IsEnabled(info) || f.IsEnabled(siteInfo{Country: "us"}) {
 		t.Error("only those countries")
 	}
 	if f.IsEnabled(siteInfo{}) || f.IsEnabled(nil) {
 		t.Error("a country that is not known is not in a list of countries")
 	}
-	f.Targeting.Provider.Exclude = NewSet("email")
+	one(&f).Provider.Exclude = NewSet("email")
 	if !f.IsEnabled(info) || f.IsEnabled(siteInfo{Country: "rs", Provider: "email"}) {
 		t.Error("all providers but one")
 	}
 	if !f.IsEnabled(siteInfo{Country: "rs"}) {
 		t.Error("a provider that is not known is not one that is excluded")
 	}
-	f.Targeting.Languages.Include = NewSet("en")
+	one(&f).Languages.Include = NewSet("en")
 	if !f.IsEnabled(info) || f.IsEnabled(siteInfo{Country: "rs", Languages: []string{"sr"}}) {
 		t.Error("one of the languages has to be in")
 	}
-	f.Targeting.UserID.Exclude = NewSet[uint](13)
+	one(&f).UserID.Exclude = NewSet[uint](13)
 	if !f.IsEnabled(info) || f.IsEnabled(siteInfo{Country: "rs", Languages: []string{"en"}, UserID: 13}) {
 		t.Error("a person that is kept out")
 	}
-	f.Targeting.Groups.Include = NewSet("beta")
+	one(&f).Groups.Include = NewSet("beta")
 	if f.IsEnabled(info) || !f.IsEnabled(siteInfo{Country: "rs", Languages: []string{"en"}, Groups: []string{"staff", "beta"}}) {
 		t.Error("one of the groups has to be in")
 	}
@@ -121,7 +129,7 @@ func TestFeatureIsOnForWhoIsInTheTargeting(t *testing.T) {
 	}
 	// the info may be a pointer
 	f.Enabled = true
-	f.Targeting.Groups = Rule[string]{}
+	one(&f).Groups = Rule[string]{}
 	if !f.IsEnabled(&info) || f.IsEnabled((*siteInfo)(nil)) {
 		t.Error("a pointer to the info works, a nil one knows nothing")
 	}
@@ -133,8 +141,8 @@ func TestFeatureInfoThatIsExtendedByEmbedding(t *testing.T) {
 		Provider Rule[string]
 	}]
 	f.Enabled = true
-	f.Targeting.Country.Include = NewSet("rs")
-	f.Targeting.Provider.Include = NewSet("google")
+	one(&f).Country.Include = NewSet("rs")
+	one(&f).Provider.Include = NewSet("google")
 	if !f.IsEnabled(moreInfo{siteInfoBase{Country: "rs"}, "google"}) || f.IsEnabled(moreInfo{siteInfoBase{Country: "us"}, "google"}) {
 		t.Error("the fields of an embedded struct are the info's")
 	}
@@ -144,7 +152,7 @@ func TestFeatureInfoThatIsExtendedByEmbedding(t *testing.T) {
 	}
 	var g Feature[siteTargeting]
 	g.Enabled = true
-	g.Targeting.UserID.Exclude = NewSet[uint](13)
+	one(&g).UserID.Exclude = NewSet[uint](13)
 	if !g.IsEnabled(siteInfoBase{}) {
 		t.Error("an Exclude that the info cannot answer lets everybody in")
 	}
@@ -176,8 +184,8 @@ func TestCheckInfoFindsWhatTheInfoLacks(t *testing.T) {
 	}
 }
 
-func TestFeatureInTheSettings(t *testing.T) {
-	tn, err := New(featureConfig{}, WithName("t"), WithSource("users", DataSource[uint]{
+func usersFiveSource() Option {
+	return WithSource("users", DataSource[uint]{
 		Search: func(_ context.Context, q string, limit, offset int) ([]Item[uint], error) { return nil, nil },
 		Get: func(_ context.Context, ids []uint) ([]Item[uint], error) {
 			var out []Item[uint]
@@ -188,55 +196,67 @@ func TestFeatureInTheSettings(t *testing.T) {
 			}
 			return out, nil
 		},
-	}))
+	})
+}
+
+func TestFeatureInTheSettings(t *testing.T) {
+	tn, err := New(featureConfig{}, WithName("t"), usersFiveSource())
 	if err != nil {
 		t.Fatal(err)
 	}
 	h := tn.Handler()
 	w := do(h, "GET", "/schema", "", nil)
 	var out struct {
-		Groups []groupDTO
-		Fields []fieldDTO
+		Groups    []groupDTO
+		Fields    []fieldDTO
+		GroupSets []groupSetDTO
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
 		t.Fatal(err)
 	}
-	by := map[string]fieldDTO{}
 	var keys []string
 	for _, f := range out.Fields {
-		by[f.Key] = f
 		keys = append(keys, f.Key)
 	}
-	// the switch first, then the rules, right in the feature (no "targeting" level)
-	if keys[0] != "features.checkout.enabled" || keys[1] != "features.checkout.country.include" || keys[2] != "features.checkout.country.exclude" {
-		t.Errorf("keys %v", keys[:4])
+	// a feature is its switch: its targeting is the groups, a list of its own
+	if !slices.Equal(keys, []string{"features.checkout.enabled", "features.beta.enabled"}) {
+		t.Errorf("keys %v", keys)
 	}
-	for _, k := range keys {
-		if strings.Contains(k, ".targeting.") {
-			t.Errorf("%s: the targeting is not a level of its own", k)
-		}
-	}
-	if f := by["features.checkout.enabled"]; f.Type != "bool" || f.Value != false || f.Name != "Enabled" {
+	if f := out.Fields[0]; f.Type != "bool" || f.Value != false || f.Name != "Enabled" {
 		t.Errorf("enabled %+v", f)
 	}
-	if f := by["features.checkout.country.include"]; f.Type != "set" || f.Item != "string" || f.Name != "Only" {
+	if len(out.GroupSets) != 2 || out.GroupSets[0].Key != "features.checkout.groups" || out.GroupSets[0].Feature != "features.checkout" || out.GroupSets[1].Key != "features.beta.groups" {
+		t.Fatalf("group sets %+v", out.GroupSets)
+	}
+	set := out.GroupSets[0]
+	if set.Max != maxGroups || len(set.Items) != 0 {
+		t.Errorf("the groups there are: %+v", set)
+	}
+	// what a group is made of: the rules, right in it (no "targeting" level), as the fields of the settings are
+	by := map[string]fieldDTO{}
+	for _, f := range set.Fields {
+		by[f.Key] = f
+		if strings.Contains(f.Key, "targeting") {
+			t.Errorf("%s: the targeting is not a level of its own", f.Key)
+		}
+	}
+	if f := by["country.include"]; f.Type != "set" || f.Item != "string" || f.Name != "Only" {
 		t.Errorf("include %+v", f)
 	}
-	if f := by["features.checkout.country.exclude"]; f.Name != "Except" {
+	if f := by["country.exclude"]; f.Name != "Except" {
 		t.Errorf("exclude %+v", f)
 	}
 	// the options of a rule's tag are of both its sets
-	for _, k := range []string{"features.checkout.provider.include", "features.checkout.provider.exclude"} {
+	for _, k := range []string{"provider.include", "provider.exclude"} {
 		if f := by[k]; !slices.Equal(f.Enum, []string{"google", "telegram", "email"}) || f.Item != "enum" {
 			t.Errorf("%s %+v", k, f)
 		}
 	}
-	for _, k := range []string{"features.checkout.users.include", "features.checkout.users.exclude"} {
+	for _, k := range []string{"users.include", "users.exclude"} {
 		if f := by[k]; f.Source != "users" || f.UI != "picker" || f.Item != "int" {
 			t.Errorf("%s %+v", k, f)
 		}
 	}
-	// the groups: the feature, then its rules
 	names := map[string]groupDTO{}
 	for _, g := range out.Groups {
 		names[g.Key] = g
@@ -245,37 +265,48 @@ func TestFeatureInTheSettings(t *testing.T) {
 		name          string
 		rule, feature bool
 	}{
-		"features":                   {"Features", false, false},
-		"features.checkout":          {"New checkout", false, true},
-		"features.checkout.country":  {"Country", true, false},
-		"features.checkout.provider": {"Account provider", true, false},
-		"features.beta":              {"Beta", false, true},
-		"features.beta.country":      {"Country", true, false},
+		"features":          {"Features", false, false},
+		"features.checkout": {"New checkout", false, true},
+		"features.beta":     {"Beta", false, true},
 	} {
 		if g := names[key]; g.Name != want.name || g.Rule != want.rule || g.Feature != want.feature {
 			t.Errorf("group %s: %+v", key, g)
 		}
 	}
-	if _, ok := names["features.checkout.targeting"]; ok {
-		t.Error("no group of the targeting")
+	rules := map[string]groupDTO{}
+	for _, g := range set.Groups {
+		rules[g.Key] = g
+	}
+	if g := rules["country"]; g.Name != "Country" || !g.Rule {
+		t.Errorf("rule %+v", g)
+	}
+	if g := rules["provider"]; g.Name != "Account provider" || !g.Rule {
+		t.Errorf("rule %+v", g)
 	}
 
-	// changed through the API, and read as plain Go
-	for key, value := range map[string]string{
-		"features.checkout.enabled":          `true`,
-		"features.checkout.country.include":  `["rs","ua"]`,
-		"features.checkout.provider.exclude": `["email"]`,
-		"features.checkout.users.exclude":    `[5]`,
-	} {
-		if w := do(h, "PUT", "/values/"+key, `{"value":`+value+`}`, jsonCT); w.Code != 200 {
-			t.Fatalf("%s: %d %s", key, w.Code, w.Body)
+	// changed through the API: the switch is a value, the groups are one, with their rules in them
+	if w := do(h, "PUT", "/values/features.checkout.enabled", `{"value":true}`, jsonCT); w.Code != 200 {
+		t.Fatalf("enabled: %d %s", w.Code, w.Body)
+	}
+	good := `{"value":[{"id":"serbia","name":"Serbia","targeting":{"country":{"include":["rs","ua"]},"provider":{"exclude":["email"]},"users":{"exclude":[5]}}}]}`
+	if w := do(h, "PUT", "/values/features.checkout.groups", good, jsonCT); w.Code != 200 {
+		t.Fatalf("groups: %d %s", w.Code, w.Body)
+	}
+	bad := func(value, what string) {
+		t.Helper()
+		w := do(h, "PUT", "/values/features.checkout.groups", `{"value":`+value+`}`, jsonCT)
+		if w.Code != 400 {
+			t.Errorf("%s: %d %s", what, w.Code, w.Body)
 		}
 	}
-	if w := do(h, "PUT", "/values/features.checkout.provider.exclude", `{"value":["netscape"]}`, jsonCT); w.Code != 400 {
-		t.Errorf("an enum of the rule is kept: %d", w.Code)
-	}
-	if w := do(h, "PUT", "/values/features.checkout.users.exclude", `{"value":[99]}`, jsonCT); w.Code != 400 {
-		t.Errorf("the source of the rule is asked: %d %s", w.Code, w.Body)
+	bad(`[{"id":"a","targeting":{"provider":{"exclude":["netscape"]}}}]`, "an enum of the rule is kept")
+	bad(`[{"id":"a","targeting":{"users":{"exclude":[99]}}}]`, "the source of the rule is asked")
+	bad(`[{"id":"a","targeting":{"nothing":{"include":["x"]}}}]`, "a rule that is not there")
+	bad(`[{"id":"a b"}]`, "an id of letters and digits")
+	bad(`[{"id":"a"},{"id":"a"}]`, "an id twice")
+	bad(`{"id":"a"}`, "not a list")
+	if got := tn.Get().Features.Checkout.Groups; len(got) != 1 || got[0].ID != "serbia" {
+		t.Errorf("a change that was refused changes nothing: %+v", got)
 	}
 	c := tn.Get().Features.Checkout
 	if !c.IsEnabled(siteInfo{Country: "rs", Provider: "google"}) || c.IsEnabled(siteInfo{Country: "rs", Provider: "email"}) || c.IsEnabled(siteInfo{Country: "us"}) || c.IsEnabled(siteInfo{Country: "rs", UserID: 5}) {
@@ -284,8 +315,17 @@ func TestFeatureInTheSettings(t *testing.T) {
 	if tn.Get().Features.Beta.Enabled {
 		t.Error("the other feature is as it was")
 	}
-	// and back
-	if err := tn.Reset("features.checkout.country.include"); err != nil {
+	// the groups on the wire are what was set, by the keys of the fields
+	var after struct{ GroupSets []groupSetDTO }
+	if err := json.Unmarshal(do(h, "GET", "/schema", "", nil).Body.Bytes(), &after); err != nil {
+		t.Fatal(err)
+	}
+	items := after.GroupSets[0].Items
+	if len(items) != 1 || items[0].ID != "serbia" || items[0].Name != "Serbia" || !reflect.DeepEqual(items[0].Values["country.include"], []any{"rs", "ua"}) || !reflect.DeepEqual(items[0].Values["users.exclude"], []any{float64(5)}) {
+		t.Errorf("items %+v", items)
+	}
+	// and back: no group is for everybody
+	if err := tn.Reset("features.checkout.groups"); err != nil {
 		t.Fatal(err)
 	}
 	if !tn.Get().Features.Checkout.IsEnabled(siteInfo{Country: "us", Provider: "google"}) {
@@ -572,11 +612,11 @@ func TestMatcherSaysWhatOnSays(t *testing.T) {
 		{Provider: Rule[string]{Include: NewSet("google", "telegram")}},
 	}
 	for i, tg := range rules {
-		f := Feature[siteTargeting]{Enabled: true, Targeting: tg}
+		f := Feature[siteTargeting]{Enabled: true, Groups: []Group[siteTargeting]{{ID: "g", Targeting: tg}}}
 		for j, info := range infos {
 			info := info
 			want := targets(reflect.ValueOf(tg), info) // the reflective one is the reference
-			if got := m.Targets(&tg, &info); got != want {
+			if got := m.Targets(&f, &info); got != want {
 				t.Errorf("rules %d, info %d: matcher %v, reflection %v", i, j, got, want)
 			}
 			if got := f.IsEnabled(info); got != want {
@@ -603,10 +643,10 @@ func TestMatcherCostsNothingToUse(t *testing.T) {
 		t.Fatal(err)
 	}
 	f := Feature[siteTargeting]{Enabled: true}
-	f.Targeting.Country.Include = NewSet("rs", "ua")
-	f.Targeting.Provider.Exclude = NewSet("email")
-	f.Targeting.Languages.Include = NewSet("en")
-	f.Targeting.UserID.Exclude = NewSet[uint](13)
+	one(&f).Country.Include = NewSet("rs", "ua")
+	one(&f).Provider.Exclude = NewSet("email")
+	one(&f).Languages.Include = NewSet("en")
+	one(&f).UserID.Exclude = NewSet[uint](13)
 	info := fullInfo{Country: "rs", Languages: []string{"sr", "en"}, Provider: "google", UserID: 7}
 	if !m.IsEnabled(&f, &info) {
 		t.Fatal("it is in")
@@ -637,7 +677,7 @@ func TestMatcherRefusesWhatItCannotFollow(t *testing.T) {
 	}
 	// ...but Feature.IsEnabled still reads it (by reflection)
 	f := Feature[siteTargeting]{Enabled: true}
-	f.Targeting.Country.Include = NewSet("rs")
+	one(&f).Country.Include = NewSet("rs")
 	if !f.IsEnabled(viaPointer{base: &base{Country: "rs"}}) || f.IsEnabled(viaPointer{base: &base{Country: "us"}}) || f.IsEnabled(viaPointer{}) {
 		t.Error("an embedded pointer is read")
 	}
@@ -651,10 +691,10 @@ func TestMatcherRefusesWhatItCannotFollow(t *testing.T) {
 
 func BenchmarkFeatureChecks(b *testing.B) {
 	f := Feature[siteTargeting]{Enabled: true}
-	f.Targeting.Country.Include = NewSet("rs", "ua")
-	f.Targeting.Provider.Exclude = NewSet("email")
-	f.Targeting.Languages.Include = NewSet("en")
-	f.Targeting.UserID.Exclude = NewSet[uint](13)
+	one(&f).Country.Include = NewSet("rs", "ua")
+	one(&f).Provider.Exclude = NewSet("email")
+	one(&f).Languages.Include = NewSet("en")
+	one(&f).UserID.Exclude = NewSet[uint](13)
 	info := fullInfo{Country: "rs", Languages: []string{"sr", "en"}, Provider: "google", UserID: 7}
 	m, err := NewMatcher[siteTargeting, fullInfo]()
 	if err != nil {
@@ -680,7 +720,7 @@ func BenchmarkFeatureChecks(b *testing.B) {
 	})
 	b.Run("reflection-every-time", func(b *testing.B) {
 		b.ReportAllocs()
-		tv := reflect.ValueOf(f.Targeting)
+		tv := reflect.ValueOf(f.Groups[0].Targeting)
 		for i := 0; i < b.N; i++ {
 			targets(tv, info)
 		}

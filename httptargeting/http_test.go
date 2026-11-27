@@ -132,6 +132,14 @@ type features struct {
 	} `json:"features"`
 }
 
+// one is the targeting of the only group of a feature (made when there is none yet)
+func one[T any](f *tunables.Feature[T]) *T {
+	if len(f.Groups) == 0 {
+		f.Groups = append(f.Groups, tunables.Group[T]{ID: "g"})
+	}
+	return &f.Groups[0].Targeting
+}
+
 func do(h http.Handler, method, path, body string) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(method, path, strings.NewReader(body))
 	if method == "PUT" {
@@ -151,9 +159,9 @@ func TestTheInfoAndTheTargetingGoTogether(t *testing.T) {
 		t.Fatal(err)
 	}
 	f := tunables.Feature[Targeting]{Enabled: true}
-	f.Targeting.Country.Include = tunables.NewSet("rs")
-	f.Targeting.Device.Exclude = tunables.NewSet("bot")
-	f.Targeting.Languages.Include = tunables.NewSet("en")
+	one(&f).Country.Include = tunables.NewSet("rs")
+	one(&f).Device.Exclude = tunables.NewSet("bot")
+	one(&f).Languages.Include = tunables.NewSet("en")
 	in := Info{Country: "rs", Device: "desktop", Languages: []string{"sr", "en"}, IP: "1.2.3.4", Language: "sr"}
 	if !m.IsEnabled(&f, &in) || !f.IsEnabled(in) {
 		t.Error("in")
@@ -188,9 +196,9 @@ func TestExtendedByEmbedding(t *testing.T) {
 		t.Fatal(err)
 	}
 	f := tunables.Feature[myTargeting]{Enabled: true}
-	f.Targeting.Country.Include = tunables.NewSet("rs")
-	f.Targeting.Provider.Include = tunables.NewSet("telegram")
-	f.Targeting.UserID.Exclude = tunables.NewSet[uint](13)
+	one(&f).Country.Include = tunables.NewSet("rs")
+	one(&f).Provider.Include = tunables.NewSet("telegram")
+	one(&f).UserID.Exclude = tunables.NewSet[uint](13)
 	ok := myInfo{Info: Info{Country: "rs"}, Provider: "telegram", UserID: 7}
 	if !m.IsEnabled(&f, &ok) {
 		t.Error("the base rules and the new ones together")
@@ -213,7 +221,10 @@ func TestExtendedByEmbedding(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out struct {
-		Fields []struct{ Key string }
+		Fields    []struct{ Key string }
+		GroupSets []struct {
+			Fields []struct{ Key string }
+		}
 	}
 	if err := json.Unmarshal(do(tn.Handler(), "GET", "/schema", "").Body.Bytes(), &out); err != nil {
 		t.Fatal(err)
@@ -221,6 +232,9 @@ func TestExtendedByEmbedding(t *testing.T) {
 	var keys []string
 	for _, f := range out.Fields {
 		keys = append(keys, f.Key)
+	}
+	for _, f := range out.GroupSets[0].Fields { // the rules are in the groups: one place for all of them
+		keys = append(keys, "f."+f.Key)
 	}
 	for _, want := range []string{"f.enabled", "f.country.include", "f.device.exclude", "f.provider.include", "f.users.exclude"} {
 		if !slices.Contains(keys, want) {
@@ -236,9 +250,11 @@ func TestTheListsTheRulesPickFrom(t *testing.T) {
 	}
 	h := tn.Handler()
 	var out struct {
-		Fields []struct {
-			Key, Source, UI, Item string
-			Custom                bool
+		GroupSets []struct {
+			Fields []struct {
+				Key, Source, UI, Item string
+				Custom                bool
+			}
 		}
 	}
 	if err := json.Unmarshal(do(h, "GET", "/schema", "").Body.Bytes(), &out); err != nil {
@@ -248,7 +264,7 @@ func TestTheListsTheRulesPickFrom(t *testing.T) {
 		Key, Source, UI, Item string
 		Custom                bool
 	}{}
-	for _, f := range out.Fields {
+	for _, f := range out.GroupSets[0].Fields { // the rules of a group, by their keys in it
 		by[f.Key] = f
 	}
 	for rule, want := range map[string]struct {
@@ -258,13 +274,13 @@ func TestTheListsTheRulesPickFrom(t *testing.T) {
 		"country": {"countries", true}, "region": {"regions", true}, "city": {"cities", true}, "languages": {"languages", true}, "browser": {"browsers", true}, "os": {"systems", true}, "device": {"devices", false},
 	} {
 		for _, side := range []string{"include", "exclude"} {
-			f := by["features.checkout."+rule+"."+side]
+			f := by[rule+"."+side]
 			if f.Source != want.source || f.Custom != want.custom || f.UI != "picker" || f.Item != "string" {
 				t.Errorf("%s.%s: %+v", rule, side, f)
 			}
 		}
 	}
-	if f := by["features.checkout.host.include"]; f.Source != "" || f.UI != "chips" { // typed
+	if f := by["host.include"]; f.Source != "" || f.UI != "chips" { // typed
 		t.Errorf("host: %+v", f)
 	}
 
@@ -286,13 +302,13 @@ func TestTheListsTheRulesPickFrom(t *testing.T) {
 	}
 
 	// a code the list does not have: a country may be added by hand (custom), a device may not
-	if w := do(h, "PUT", "/values/features.checkout.country.include", `{"value":["rs","zz"]}`); w.Code != 200 {
+	if w := do(h, "PUT", "/values/features.checkout.groups", `{"value":[{"id":"a","targeting":{"country":{"include":["rs","zz"]}}}]}`); w.Code != 200 {
 		t.Errorf("custom: %d %s", w.Code, w.Body)
 	}
-	if w := do(h, "PUT", "/values/features.checkout.device.include", `{"value":["watch"]}`); w.Code != 400 {
+	if w := do(h, "PUT", "/values/features.checkout.groups", `{"value":[{"id":"a","targeting":{"device":{"include":["watch"]}}}]}`); w.Code != 400 {
 		t.Errorf("a device that is not in the list: %d %s", w.Code, w.Body)
 	}
-	if w := do(h, "PUT", "/values/features.checkout.device.include", `{"value":["tablet"]}`); w.Code != 200 {
+	if w := do(h, "PUT", "/values/features.checkout.groups", `{"value":[{"id":"a","targeting":{"device":{"include":["tablet"]}}}]}`); w.Code != 200 {
 		t.Errorf("a device of the list: %d %s", w.Code, w.Body)
 	}
 
@@ -301,7 +317,7 @@ func TestTheListsTheRulesPickFrom(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if w := do(own.Handler(), "PUT", "/values/features.checkout.device.include", `{"value":["watch"]}`); w.Code != 200 {
+	if w := do(own.Handler(), "PUT", "/values/features.checkout.groups", `{"value":[{"id":"a","targeting":{"device":{"include":["watch"]}}}]}`); w.Code != 200 {
 		t.Errorf("its own list: %d %s", w.Code, w.Body)
 	}
 }
@@ -335,7 +351,7 @@ func TestTheStandardListsCanBeAddedTo(t *testing.T) {
 		t.Errorf("browsers: %d %s", w.Code, body)
 	}
 	// both can be chosen
-	if w := do(h, "PUT", "/values/features.checkout.browser.include", `{"value":["yandex browser","chrome"]}`); w.Code != 200 {
+	if w := do(h, "PUT", "/values/features.checkout.groups", `{"value":[{"id":"a","targeting":{"browser":{"include":["yandex browser","chrome"]}}}]}`); w.Code != 200 {
 		t.Errorf("%d %s", w.Code, w.Body)
 	}
 }

@@ -153,7 +153,11 @@ func (c *core) schemaPayload() map[string]any {
 	for _, g := range c.groups {
 		groups = append(groups, groupDTO{Key: g.key, Name: g.name, Desc: g.desc, Rule: g.rule, Collapsed: g.collapsed, Feature: g.feature})
 	}
-	return map[string]any{"groups": groups, "fields": fields}
+	sets := make([]groupSetDTO, 0, len(c.groupSets))
+	for _, gs := range c.groupSets {
+		sets = append(sets, c.groupSetDTO(gs, s))
+	}
+	return map[string]any{"groups": groups, "fields": fields, "groupSets": sets}
 }
 
 func (c *core) handleMeta(w http.ResponseWriter, _ *http.Request) {
@@ -200,6 +204,10 @@ func (c *core) respondChange(w http.ResponseWriter, key string, err error) {
 		c.opts.log.Error("tunables: change failed", "key", key, "error", err)
 		c.writeError(w, http.StatusInternalServerError, "could not save the change")
 	default:
+		if gs, ok := c.groupByKey[key]; ok {
+			c.writeJSON(w, http.StatusOK, c.groupSetDTO(gs, c.state.Load()))
+			return
+		}
 		c.writeJSON(w, http.StatusOK, c.dto(c.byKey[key], c.state.Load()))
 	}
 }
@@ -217,7 +225,11 @@ type groupDTO struct {
 }
 
 func (c *core) dto(f *field, s *snapshot) fieldDTO {
-	cur := f.read(s.cfg.Elem().FieldByIndex(f.index))
+	return c.dtoOf(f, f.read(s.cfg.Elem().FieldByIndex(f.index)))
+}
+
+// dtoOf is a field on the wire, with the value it has.
+func (c *core) dtoOf(f *field, cur any) fieldDTO {
 	item := f // the field that holds the enum and the bounds: the item of a list or a set
 	d := fieldDTO{MinLen: f.minLen, MaxLen: f.maxLen, Source: f.source, Custom: f.custom, Optional: f.ptr}
 	if f.collection() {

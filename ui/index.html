@@ -48,12 +48,14 @@ button,input,textarea{font-family:inherit}
 @keyframes select-in{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
 .select-viewport{padding:4px}
 .select-item{position:relative;display:flex;width:100%;align-items:center;border-radius:calc(var(--radius) - 4px);padding:6px 32px 6px 8px;font-size:14px;line-height:20px;cursor:pointer;user-select:none;outline:none}
+.select-item[hidden]{display:none}
+.select-content .select-search{width:calc(100% - 8px);margin:4px}
 .select-item:hover,.select-item:focus{background:hsl(var(--accent));color:hsl(var(--accent-foreground))}
 .select-indicator{position:absolute;right:8px;display:flex;width:14px;height:14px;align-items:center;justify-content:center}
 .select-indicator svg{width:16px;height:16px}
 
 /* ---- a feature: its rules are added from a list; while it is off they are folded away ---- */
-.feature-add{margin-top:12px}
+.feature-add{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 .feature-add-button svg{width:16px;height:16px;margin-right:6px}
 .group.feature.off>.group,.group.feature.off>.feature-add,.page.feature.off>.group:not(:first-child),.page.feature.off>.feature-add{display:none}
 
@@ -72,7 +74,22 @@ button,input,textarea{font-family:inherit}
 .dialog-item-name{font-size:14px;line-height:20px;font-weight:500}
 .dialog-item-desc{font-size:12px;line-height:16px;color:hsl(var(--muted-foreground))}
 .group-remove{margin-left:auto}
+.group-toggle.group-share-button{width:auto;min-width:28px;gap:4px;padding:0 6px;margin-left:auto;font-size:12px;font-weight:500}
+.group-toggle.group-share-button.set{color:hsl(var(--foreground))}
+.group-toggle.group-share-button+.group-remove{margin-left:0}
+.group-share:empty{display:none}
 .group-remove+.group-toggle{margin-left:0}
+.group.target-group{margin:0 0 12px;padding:14px 20px 16px;border:1px solid hsl(var(--border));border-radius:var(--radius)}
+.group.target-group>.group-head{margin-bottom:4px}
+.group.target-group.collapsed{padding-bottom:12px}
+.group-or{display:flex;align-items:center;gap:12px;margin:0 0 12px;color:hsl(var(--muted-foreground));font-size:12px;line-height:16px;font-weight:500;letter-spacing:.08em;text-transform:uppercase}
+.group-or::before,.group-or::after{content:"";flex:1;height:1px;background:hsl(var(--border))}
+.heading .group-name{flex:1;min-width:0;height:auto;padding:2px 6px;margin-left:-6px;border:1px solid transparent;border-radius:calc(var(--radius) - 4px);background:transparent;box-shadow:none;color:inherit;font:inherit;letter-spacing:inherit}
+.heading .group-name:hover{background:hsl(var(--muted))}
+.heading .group-name:focus{outline:none;background:hsl(var(--background));border-color:hsl(var(--ring))}
+.heading .group-name::placeholder{color:hsl(var(--muted-foreground));font-weight:400}
+.group-switch{flex:none;margin-left:auto}
+.group-switch+.group-toggle{margin-left:8px}
 @media (max-width:640px){.dialog-overlay{padding:6vh 8px 8px}.dialog{padding:16px}}
 
 /* ---- Switch, Checkbox, Radio group ---- */
@@ -87,8 +104,10 @@ button,input,textarea{font-family:inherit}
 .checkbox svg{width:14px;height:14px}
 
 /* ---- Button group (SelectButtons of the shop): joined buttons, the chosen one is "default", the rest "secondary" ---- */
-.select-buttons{display:flex;height:36px;min-width:14rem;max-width:100%;justify-content:space-between;gap:0;overflow:hidden;border-radius:var(--radius)}
-.select-buttons .btn{flex:1 1 auto;height:100%;border-radius:0;font-size:14px;transition-duration:.1s}
+.select-buttons{display:flex;height:36px;min-width:14rem;max-width:100%;justify-content:space-between;gap:2px;padding:3px;overflow:hidden;border-radius:var(--radius);background:hsl(var(--muted))}
+.select-buttons .btn{flex:1 1 auto;height:100%;border-radius:calc(var(--radius) - 3px);background:transparent;box-shadow:none;color:hsl(var(--muted-foreground));font-size:14px;transition-duration:.1s}
+.select-buttons .btn:hover{color:hsl(var(--foreground))}
+.select-buttons .btn[aria-checked=true]{background:hsl(var(--background));color:hsl(var(--foreground));box-shadow:var(--shadow-sm)}
 
 /* ---- Slider ---- */
 .slider{position:relative;display:flex;width:100%;height:32px;align-items:center;touch-action:none;user-select:none;cursor:pointer}
@@ -339,6 +358,7 @@ const ICON = {
   arrowLeft: '<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>',
   luCheck: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>',
   luRotateCcw: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>',
+  sliders: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></svg>',
   luX: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
   plus: '<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>',
   minus: '<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"></line></svg>',
@@ -391,7 +411,7 @@ function ButtonGroup(options, onChange) {
   const set = (v) => {
     for (const [o, b] of buttons) {
       const on = o === v;
-      b.className = `btn btn-${on ? "default" : "secondary"} size-sm`;
+      b.className = "btn size-sm";
       b.setAttribute("aria-checked", String(on));
     }
   };
@@ -404,15 +424,17 @@ function ButtonGroup(options, onChange) {
   return { el: group, set };
 }
 
-function Select(options, onChange) {
+// multi: the list stays open and each pick is switched on or off (isOn says which are on); the trigger shows only the placeholder
+function Select(options, onChange, { multi = false, isOn = () => false, placeholder = "" } = {}) {
   let value = "";
   let menu = null;
-  const label = el("span");
+  const label = el("span", { textContent: placeholder });
   const trigger = el("button", { type: "button", className: "select-trigger", role: "combobox" }, label, icon("chevronDown"));
   trigger.setAttribute("aria-haspopup", "listbox");
   trigger.setAttribute("aria-expanded", "false");
 
-  const set = (v) => { value = v; label.textContent = v; };
+  const set = (v) => { value = v; label.textContent = multi ? placeholder : v; };
+  const marked = (o) => (multi ? isOn(o) : o === value);
 
   function close(refocus) {
     if (!menu) return;
@@ -433,12 +455,28 @@ function Select(options, onChange) {
       const item = el("div", { className: "select-item", role: "option", tabIndex: -1 }, el("span", { textContent: o }),
         el("span", { className: "select-indicator" }));
       item.dataset.value = o;
-      item.setAttribute("aria-selected", String(o === value));
-      if (o === value) item.querySelector(".select-indicator").append(icon("check"));
-      item.onclick = () => { set(o); close(true); onChange(o); };
+      const mark = () => {
+        const on = marked(o);
+        item.setAttribute("aria-selected", String(on));
+        item.querySelector(".select-indicator").replaceChildren(...(on ? [icon("check")] : []));
+      };
+      mark();
+      item.onclick = () => {
+        if (multi) { onChange(o); items.forEach((i) => i.mark()); return; }
+        set(o); close(true); onChange(o);
+      };
+      item.mark = mark;
       return item;
     });
-    menu = el("div", { className: "select-content", role: "listbox" }, el("div", { className: "select-viewport" }, ...items));
+    // a multiple choice is searched, as a list of a source is
+    const search = multi ? Input({ className: "select-search", placeholder: "Search…", spellcheck: false }) : null;
+    if (search) {
+      search.oninput = () => {
+        const q = search.value.trim().toLowerCase();
+        for (const i of items) i.hidden = !i.dataset.value.toLowerCase().includes(q);
+      };
+    }
+    menu = el("div", { className: "select-content", role: "listbox" }, ...(search ? [search] : []), el("div", { className: "select-viewport" }, ...items));
     document.body.append(menu);
     trigger.setAttribute("aria-expanded", "true");
 
@@ -458,15 +496,21 @@ function Select(options, onChange) {
     addEventListener("resize", close);
     addEventListener("scroll", onScroll, true);
 
-    (items.find((i) => i.dataset.value === value) || items[0]).focus();
+    (search || items.find((i) => marked(i.dataset.value)) || items[0]).focus();
     menu.onkeydown = (e) => {
-      const i = items.indexOf(document.activeElement);
-      const go = (n) => { e.preventDefault(); items[(n + items.length) % items.length].focus(); };
+      const shown = items.filter((x) => !x.hidden);
+      const i = shown.indexOf(document.activeElement);
+      const typing = search && document.activeElement === search;
+      const go = (n) => {
+        e.preventDefault();
+        if (n < 0 && search) search.focus();
+        else if (shown.length) shown[(n + shown.length) % shown.length].focus();
+      };
       if (e.key === "ArrowDown") go(i + 1);
       else if (e.key === "ArrowUp") go(i - 1);
-      else if (e.key === "Home") go(0);
-      else if (e.key === "End") go(items.length - 1);
-      else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (i >= 0) items[i].click(); }
+      else if (e.key === "Home" && !typing) go(0);
+      else if (e.key === "End" && !typing) go(shown.length - 1);
+      else if (e.key === "Enter" || (e.key === " " && !typing)) { e.preventDefault(); (typing ? shown[0] : shown[i])?.click(); }
       else if (e.key === "Escape") { e.preventDefault(); close(true); }
       else if (e.key === "Tab") close(false);
     };
@@ -644,11 +688,12 @@ function Chips(f, onChange) {
   }
 
   // the control that makes the next item; take() returns it (or undefined while the control holds nothing)
-  const add_ = Button({ variant: "secondary", size: "icon", className: "chip-add", ariaLabel: "Add" }, icon("plus"));
   let take = () => undefined;
   let clear = () => {};
   let control;
   let focusable;
+  let add_ = null; // only a duration has a button: its two parts have no way to say "this one"
+  let commits = true; // the item is taken when Enter is pressed or the control is left
   if (f.item === "int" || f.item === "float") {
     const num = NumberInput({ type: f.item, plain: true, empty: true, min: f.min, max: f.max, className: "chip-input" });
     control = num.el;
@@ -667,27 +712,42 @@ function Chips(f, onChange) {
     d.set(cur);
     control = d.el;
     take = () => cur;
-  } else { // an enum, or true/false
+    add_ = Button({ variant: "secondary", className: "chip-add", ariaLabel: "Add" }, "Add");
+    commits = false;
+  } else { // an enum, or true/false: a multiple choice, nothing is chosen at first
     const options = f.item === "bool" ? ["true", "false"] : f.enum;
-    let cur = options[0];
-    const sel = Select(options, (v) => { cur = v; });
-    sel.set(cur);
+    const val = (o) => (f.item === "bool" ? o === "true" : o);
+    const toggle = (o) => {
+      const v = val(o);
+      if (isSet && items.some((x) => same(x, v))) { items = items.filter((x) => !same(x, v)); render(); onChange(items.slice()); } else add(v);
+    };
+    const sel = Select(options, toggle, { multi: true, isOn: (o) => isSet && items.some((x) => same(x, val(o))), placeholder: "Select…" });
     sel.el.classList.add("chip-input");
     control = sel.el;
-    take = () => (f.item === "bool" ? cur === "true" : cur);
+    commits = false;
   }
   const adder = {
-    disabled(on) { add_.disabled = on; if (focusable) focusable.disabled = on; },
+    disabled(on) { if (add_) add_.disabled = on; if (focusable) focusable.disabled = on; },
   };
+  let busy = false; // taking a number blurs it, which takes it again
   const submit = () => {
-    const v = take();
-    if (v === undefined) return;
-    if (add(v)) clear();
+    if (busy) return;
+    busy = true;
+    try {
+      const v = take();
+      if (v === undefined) return;
+      if (add(v)) clear();
+    } finally {
+      busy = false;
+    }
   };
-  add_.onclick = submit;
-  if (focusable) focusable.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } });
+  if (add_) add_.onclick = submit;
+  if (focusable && commits) {
+    focusable.addEventListener("keydown", (e) => { if (e.key === "Enter" || (e.key === "," && f.item === "string")) { e.preventDefault(); submit(); } });
+    focusable.addEventListener("blur", submit);
+  }
 
-  const root = el("div", { className: "chips-box" }, el("div", { className: "adder" }, control, add_), chips); // the input on top, the list under it
+  const root = el("div", { className: "chips-box" }, el("div", { className: "adder" }, control, ...(add_ ? [add_] : [])), chips); // the input on top, the list under it
   render();
   return { el: root, set(v) { items = isSet ? [...v].sort(order) : [...v]; render(); } };
 }
@@ -1101,7 +1161,7 @@ function showAuth() {
 
 // The header shows Save / Discard only while there are unsaved edits.
 function updateBar() {
-  const dirty = pending.size > 0;
+  const dirty = pending.size > 0 || groupsDirty();
   $("actions").hidden = !dirty;
   for (const b of $("actions").querySelectorAll("button")) b.disabled = saving;
   updateGroupMarks();
@@ -1185,12 +1245,87 @@ function revealGroups(key) {
 
 // Groups nest as they do in the struct (up to 3 levels): a heading, a card with its fields, then its subgroups.
 // The hierarchy is the size of the heading and the faint "child of" dots before it; breadcrumbs are only at the top of a group's page.
-function renderGroup(node, level, name, inFeature = false) {
+// The groups of a feature, one under another, then "Add group".
+function renderGroupList(node, level) {
+  const gs = groupSetsOf().find((g) => g.key === node.key);
+  const section = el("section", { className: "group group-list level-" + Math.min(level, 3) });
+  const message = el("p", { className: "message", hidden: true });
+  groupMessages.set(node.key, message);
+  const children = [...node.groups].filter(([name]) => name !== "#list");
+  const addButton = (label, onclick) => {
+    const b = Button({ variant: "outline", size: "sm", className: "feature-add-button", type: "button" }, icon("plus"), el("span", { textContent: label }));
+    b.onclick = onclick;
+    return b;
+  };
+  const addGroupButton = addButton("Add group", () => addGroup(gs));
+  if (children.length >= 2) { // two groups or more: each is a card with a name
+    children.forEach(([childName, child], i) => {
+      if (i > 0) section.append(el("div", { className: "group-or", role: "separator" }, el("span", { textContent: "or" })));
+      section.append(renderGroup(child, level, childName, false));
+    });
+    section.append(message, el("div", { className: "feature-add" }, addGroupButton));
+    return section;
+  }
+  // one group (it was made by the first targeting) or none: the page does not show a group, only its rules
+  if (children.length === 1) appendChildren(section, children[0][1], level, groupMeta.get(children[0][1].key) || {}, true);
+  let row = section.lastElementChild?.classList.contains("feature-add") ? section.lastElementChild : null;
+  if (!row) {
+    row = el("div", { className: "feature-add" });
+    if (children.length === 0) { // the group is made when the first targeting is picked
+      const rules = gs.groups.filter((g) => g.rule);
+      const pick = addButton("Add targeting", () => openDialog({
+        title: "Add targeting",
+        description: "Who the feature is on for: a targeting is added with what it lets in and what it keeps out.",
+        searchPlaceholder: "Search the targetings…",
+        empty: "All the targetings are added.",
+        opener: pick,
+        items: rules.map((g) => ({ key: g.key, name: g.name || g.key, desc: g.desc || "" })),
+        onPick: (it) => {
+          shownRules.add(gs.key + "." + draftGroup(gs) + "." + it.key);
+          rebuild();
+          updateBar();
+        },
+      }));
+      row.append(pick);
+    }
+    section.append(row);
+  }
+  if (children.length > 0) row.append(addGroupButton); // with no group only a targeting is added: it makes the first one
+  row.before(message);
+  return section;
+}
+const groupMessages = new Map(); // key of a list -> the line that says what is wrong with it
+
+// the switch of a feature goes in its heading, not in a row of its own
+function powerSwitch(node, title) {
+  const enabled = node.rows.find((x) => x.name === "enabled" && x.f.type === "bool");
+  if (!enabled) return null;
+  const row = makeRow(enabled.f.name || "Enabled", enabled.f);
+  rows.set(enabled.f.key, row);
+  const power = row.el.querySelector(".switch");
+  power.classList.add("group-switch");
+  power.setAttribute("aria-label", (enabled.f.name || "Enabled") + ": " + title);
+  power.title = enabled.f.desc || "Switched off, the feature is off for everybody";
+  return { power, messages: [...row.el.querySelectorAll(".message")] };
+}
+
+function renderGroup(node, level, name, inFeature = false, flat = false) {
   const meta = groupMeta.get(node.key) || {};
+  if (meta.groupList) return renderGroupList(node, level);
   const title = meta.name || name;
-  const section = el("section", { className: "group level-" + Math.min(level, 3) + (meta.rule ? " rule" : "") + (meta.feature ? " feature" : "") });
+  const section = el("section", { className: "group level-" + Math.min(level, 3) + (meta.rule ? " rule" : "") + (meta.feature ? " feature" : "") + (meta.targetGroup ? " target-group" : "") });
   if (level > 0) {
-    const link = el("a", { className: "heading-link", href: "#/" + encodeURIComponent(node.key), title: "Open " + title }, title, icon("chevronRight"));
+    let link = el("a", { className: "heading-link", href: "#/" + encodeURIComponent(node.key), title: "Open " + title }, title, icon("chevronRight"));
+    let nameRow = null;
+    if (meta.targetGroup) { // a group of a feature has its name in the heading, to be changed there
+      const f = node.rows.find((x) => x.name === "name").f;
+      nameRow = makeRow("Name", f);
+      rows.set(f.key, nameRow);
+      link = nameRow.el.querySelector("input");
+      link.classList.add("group-name");
+      link.placeholder = meta.name; // nothing typed: "Group A", the name the server gives
+      link.setAttribute("aria-label", "Name of the group");
+    }
     // a group can be folded: by what its struct tag says (collapsed), until someone opens or folds it, which the browser remembers
     const folded = isCollapsed(node.key, meta);
     section.classList.toggle("collapsed", folded);
@@ -1205,30 +1340,186 @@ function renderGroup(node, level, name, inFeature = false) {
     const summary = meta.rule ? el("span", { className: "group-summary" }) : null; // what a folded Rule holds
     groupEls.set(node.key, { section, node, summary });
     // a Rule of a feature is added from a list: here it is taken away again (what it held is emptied, saved with the rest)
-    const remove = meta.rule && inFeature ? el("button", { type: "button", className: "group-toggle group-remove", ariaLabel: "Remove " + title, title: "Remove" }, icon("luX")) : null;
-    if (remove) remove.onclick = () => removeRule(node);
-    const heading = el("h" + Math.min(level + 1, 4), { className: "heading" }, ...depthMarker(level), link, ...(summary ? [summary] : []), ...(remove ? [remove] : []), toggle);
+    const removes = meta.rule && inFeature || meta.targetGroup;
+    const remove = removes ? el("button", { type: "button", className: "group-toggle group-remove", ariaLabel: "Remove " + title, title: meta.targetGroup ? "Remove the group" : "Remove" }, icon("luX")) : null;
+    if (remove) remove.onclick = () => (meta.targetGroup ? removeGroup(groupSetsOf().find((g) => g.key === meta.setKey), meta.groupId) : removeRule(node));
+    const traffic = meta.targetGroup ? trafficButton(node) : null;
+    const enabled = meta.feature ? powerSwitch(node, title) : null;
+    const power = enabled && enabled.power;
+    // a group of a feature is a card: no dots before its name; the rules in it have one, the card is their parent
+    const marker = meta.targetGroup ? [] : meta.rule && inFeature && !flat ? depthMarker(2) : depthMarker(level);
+    const heading = el("h" + Math.min(level + 1, 4), { className: "heading" }, ...marker, link, ...(summary ? [summary] : []), ...(traffic ? [traffic] : []), ...(remove ? [remove] : []), ...(power ? [power] : []), toggle);
     const head = el("div", { className: "group-head" }, heading);
     if (meta.desc) head.append(el("p", { textContent: meta.desc }));
+    if (enabled) head.append(...enabled.messages);
     section.append(head);
   }
-  if (node.rows.length) section.append(rowsCard(node, level === 0));
+  const shown = level > 0 && (meta.feature || meta.targetGroup) ? node.rows.filter((x) => !(meta.feature && x.name === "enabled" && x.f.type === "bool") && !(meta.targetGroup && ["name", "percent", "split"].includes(x.name))) : node.rows;
+  if (shown.length) section.append(rowsCard(shown.length === node.rows.length ? node : { ...node, rows: shown }, level === 0));
   if (meta.feature) featureEls.push({ section, node });
   appendChildren(section, node, level + 1, meta);
   return section;
 }
 
 // The subgroups of a group. A feature shows the rules that hold something, or were added: the others are added from a list.
-function appendChildren(parent, node, level, meta) {
-  for (const [childName, child] of node.groups) {
-    const rule = (groupMeta.get(child.key) || {}).rule;
-    if (meta.feature && rule && !isRuleActive(child)) continue;
-    parent.append(renderGroup(child, level, childName, !!meta.feature));
+function appendChildren(parent, node, level, meta, flat = false) {
+  let children = [...node.groups];
+  if (meta.targetGroup) { // the rules that were added here come after the others, in the order they were added
+    const added = [...shownRules].map((key) => children.find(([, c]) => c.key === key)).filter(Boolean);
+    children = [...children.filter(([, c]) => !shownRules.has(c.key)), ...added];
   }
-  if (meta.feature) { // under the rules, always
+  for (const [childName, child] of children) {
+    const rule = (groupMeta.get(child.key) || {}).rule;
+    if (meta.targetGroup && rule && !isRuleActive(child)) continue;
+    parent.append(renderGroup(child, level, childName, !!meta.targetGroup, flat));
+  }
+  if (meta.targetGroup) { // under the rules, always: the share of the traffic, then the button that adds a rule
     const add = featureAdd(node);
     if (add) parent.append(add);
+    if (flat) { // the one group has no heading to hold its button: it goes with the others, under the rules
+      const row = add || parent.appendChild(el("div", { className: "feature-add" }));
+      row.append(trafficButton(node, true));
+    }
   }
+}
+
+// the standard name of the n-th group, as the server gives it: "Group A" ... "Group Z", "Group AA"
+function groupLetters(n) {
+  let letters = "";
+  for (; n > 0; n = Math.floor((n - 1) / 26)) letters = String.fromCharCode(65 + ((n - 1) % 26)) + letters;
+  return "Group " + letters;
+}
+
+// ---- the groups of a feature: one value on the server (features.x.groups), groups and fields of their own on the page ----
+const groupDrafts = new Map(); // key of a list -> [{id}]: the groups that were added here
+const groupDeleted = new Set(); // "list key \0 id": the groups that were taken away here
+const groupSetsOf = () => (lastData && lastData.schema.groupSets) || [];
+const deletedKey = (setKey, id) => setKey + "\u0000" + id;
+
+// the saved groups that were not taken away, then the new ones
+function groupItems(gs) {
+  const kept = gs.items.filter((it) => !groupDeleted.has(deletedKey(gs.key, it.id)));
+  return [...kept, ...(groupDrafts.get(gs.key) || []).map((d) => ({ id: d.id, name: "", percent: null, random: false, values: {}, draft: true }))];
+}
+
+// the schema with every group as groups and fields (features.x.groups.<id>.country.include)
+function expand(schema) {
+  const fields = [...schema.fields];
+  const groups = [...schema.groups];
+  for (const gs of schema.groupSets || []) {
+    groups.push({ key: gs.key, name: "Targeting", groupList: true, setKey: gs.key });
+    fields.push({ key: gs.key + ".#list", type: "string", ui: "input", name: "", value: "", default: "" }); // makes the node of the list
+    groupItems(gs).forEach((it, i) => {
+      const base = gs.key + "." + it.id;
+      groups.push({ key: base, name: it.name || groupLetters(i + 1), targetGroup: true, setKey: gs.key, groupId: it.id });
+      fields.push({ key: base + ".name", type: "string", ui: "input", name: "Name", value: it.name, default: "", modified: false });
+      fields.push({ key: base + ".percent", type: "int", ui: "slider", name: "Traffic, %", min: 0, max: 100, value: it.percent ?? 100, default: 100, modified: false });
+      fields.push({ key: base + ".split", type: "string", ui: "buttons", enum: ["murmurhash", "random"], name: "Split by", value: it.random ? "random" : "murmurhash", default: "murmurhash", modified: false });
+      for (const f of gs.fields) fields.push({ ...f, key: base + "." + f.key, value: f.key in it.values ? it.values[f.key] : f.value, modified: false });
+      for (const g of gs.groups) groups.push({ ...g, key: base + "." + g.key });
+    });
+  }
+  return { ...schema, fields, groups };
+}
+
+const underSet = (gs, key) => key.startsWith(gs.key + ".");
+const groupSetDirty = (gs) =>
+  (groupDrafts.get(gs.key) || []).length > 0 ||
+  [...groupDeleted].some((k) => k.startsWith(gs.key + "\u0000")) ||
+  [...pending.keys()].some((k) => underSet(gs, k));
+const groupsDirty = () => groupSetsOf().some(groupSetDirty);
+
+// the list as it goes to the server: what is empty is left out, a group with nothing in it too
+function composeGroups(gs) {
+  const at = (key, saved) => (pending.has(key) ? pending.get(key) : saved);
+  const groups = [];
+  for (const it of groupItems(gs)) {
+    const base = gs.key + "." + it.id;
+    const targeting = {};
+    for (const f of gs.fields) {
+      const v = at(base + "." + f.key, f.key in it.values ? it.values[f.key] : f.value);
+      if (Array.isArray(v) ? v.length === 0 : v == null || v === "") continue;
+      const path = f.key.split(".");
+      let o = targeting;
+      for (const part of path.slice(0, -1)) o = (o[part] ??= {});
+      o[path[path.length - 1]] = v;
+    }
+    const percent = at(base + ".percent", it.percent ?? 100);
+    const share = percent < 100; // 100 is all of the traffic: nothing is kept
+    if (Object.keys(targeting).length > 0 || share) {
+      groups.push({ id: it.id, name: at(base + ".name", it.name), ...(share ? { percent } : {}), ...(share && at(base + ".split", it.random ? "random" : "murmurhash") === "random" ? { random: true } : {}), targeting });
+    }
+  }
+  return groups;
+}
+
+function draftGroup(gs) {
+  const id = "n" + Math.random().toString(36).slice(2, 8);
+  groupDrafts.set(gs.key, [...(groupDrafts.get(gs.key) || []), { id }]);
+  return id;
+}
+
+function addGroup(gs) {
+  const id = draftGroup(gs);
+  rebuild();
+  updateBar();
+  groupEls.get(gs.key + "." + id)?.section.querySelector(".group-name")?.focus();
+}
+
+function removeGroup(gs, id) {
+  const drafts = groupDrafts.get(gs.key) || [];
+  if (drafts.some((d) => d.id === id)) groupDrafts.set(gs.key, drafts.filter((d) => d.id !== id));
+  else groupDeleted.add(deletedKey(gs.key, id));
+  for (const k of [...pending.keys()]) if (k.startsWith(gs.key + "." + id + ".")) pending.delete(k);
+  rebuild();
+  updateBar();
+}
+
+// ---- the share of the traffic of a group: a button, and a dialog with its two fields ----
+const fieldOf = (node, name) => node.rows.find((x) => x.name === name);
+const valueOf = (r) => (pending.has(r.f.key) ? pending.get(r.f.key) : r.f.value);
+
+function trafficButton(node, labeled = false) {
+  const share = () => {
+    const p = fieldOf(node, "percent");
+    return p ? valueOf(p) : 100;
+  };
+  const text = el("span", { className: "group-share" });
+  const button = labeled
+    ? Button({ variant: "outline", size: "sm", className: "feature-add-button", type: "button", title: "Traffic" }, icon("sliders"), text)
+    : el("button", { type: "button", className: "group-toggle group-share-button", ariaLabel: "Traffic of the group", title: "Traffic" }, icon("sliders"), text);
+  const update = () => {
+    text.textContent = share() < 100 ? share() + "%" : labeled ? "Traffic" : "";
+    button.classList.toggle("set", share() < 100);
+  };
+  update();
+  button.onclick = () => openPanel({ title: "Traffic", opener: button, rows: node.rows.filter((x) => x.name === "percent" || x.name === "split"), node, onClose: update });
+  return button;
+}
+
+// a dialog with the fields of a group (no list to pick from)
+function openPanel({ title, opener, rows: fieldRows, node, onClose }) {
+  const overlay = el("div", { className: "dialog-overlay" });
+  const close = el("button", { type: "button", className: "dialog-close", ariaLabel: "Close" }, icon("luX"));
+  const panel = el("div", { className: "dialog", role: "dialog", ariaLabel: title },
+    el("div", { className: "dialog-head" }, el("h2", { textContent: title })),
+    close, rowsCard({ ...node, rows: fieldRows }, true));
+  overlay.append(panel);
+  const prevOverflow = document.body.style.overflow;
+  const done = () => {
+    overlay.remove();
+    document.body.style.overflow = prevOverflow;
+    removeEventListener("keydown", onKey, true);
+    onClose?.();
+    opener?.focus();
+  };
+  const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); done(); } };
+  close.onclick = done;
+  overlay.addEventListener("pointerdown", (e) => { if (e.target === overlay) done(); });
+  document.body.style.overflow = "hidden";
+  addEventListener("keydown", onKey, true);
+  document.body.append(overlay);
+  close.focus();
 }
 
 // ---- the rules of a feature: added from a list in a dialog ----
@@ -1387,12 +1678,12 @@ function rowsCard(node, plain = false) {
       const sw = ButtonGroup(["Only", "Except"], choose);
       switches.push(sw);
       const adder = m.row.el.querySelector(".adder"); // typed values: the input and the plus
-      if (adder) adder.prepend(sw.el);
+      if (adder) adder.append(sw.el);
       else { // picked from a source: the input
         const input = m.row.el.querySelector(".picker-input");
         const line = el("div", { className: "rule-line" });
         input.before(line);
-        line.append(sw.el, input);
+        line.append(input, sw.el);
       }
     }
     card.classList.add("single");
@@ -1411,10 +1702,13 @@ function renderPage(node, ancestors) {
   const page = el("div", { className: "page" });
   // the title of the page: the group's own heading (the breadcrumbs above only say where it is)
   const section = el("section", { className: "group level-" + Math.min(depth, 3) });
-  const head = el("div", { className: "group-head" }, el("h" + Math.min(depth + 1, 4), { className: "heading" }, ...depthMarker(depth), el("span", { textContent: ancestors[depth - 1] })));
+  const enabled = meta.feature ? powerSwitch(node, ancestors[depth - 1]) : null;
+  const head = el("div", { className: "group-head" }, el("h" + Math.min(depth + 1, 4), { className: "heading" }, ...depthMarker(depth), el("span", { textContent: ancestors[depth - 1] }), ...(enabled ? [enabled.power] : [])));
   if (meta.desc) head.append(el("p", { textContent: meta.desc }));
+  if (enabled) head.append(...enabled.messages);
   section.append(head);
-  if (node.rows.length) section.append(rowsCard(node));
+  const shown = enabled ? node.rows.filter((x) => !(x.name === "enabled" && x.f.type === "bool")) : node.rows;
+  if (shown.length) section.append(rowsCard(shown.length === node.rows.length ? node : { ...node, rows: shown }));
   page.append(section);
   if (meta.feature) { page.classList.add("feature"); featureEls.push({ section: page, node }); }
   appendChildren(page, node, depth + 1, meta);
@@ -1547,11 +1841,13 @@ function makeRow(name, f) {
 }
 
 async function saveAll() {
-  if (saving || pending.size === 0) return;
+  if (saving || (pending.size === 0 && !groupsDirty())) return;
+  let groupsSaved = false;
   saving = true;
   updateBar();
   try {
     for (const [key, value] of [...pending]) {
+      if (groupSetsOf().some((gs) => underSet(gs, key))) continue; // the groups of a feature go as one value, below
       const row = rows.get(key);
       try {
         const next = await api("PUT", "values/" + encodeURIComponent(key), { value });
@@ -1562,25 +1858,46 @@ async function saveAll() {
         if (row) { row.fail(e.message); revealGroups(key); } // stays pending, so Save can be retried after fixing it
       }
     }
+    for (const gs of groupSetsOf()) {
+      if (!groupSetDirty(gs)) continue;
+      const message = groupMessages.get(gs.key);
+      try {
+        await api("PUT", "values/" + encodeURIComponent(gs.key), { value: composeGroups(gs) });
+        groupsSaved = true;
+        groupDrafts.delete(gs.key);
+        for (const k of [...groupDeleted]) if (k.startsWith(gs.key + "\u0000")) groupDeleted.delete(k);
+        for (const k of [...pending.keys()]) if (underSet(gs, k)) pending.delete(k);
+        if (message) message.hidden = true;
+      } catch (e) {
+        if (e instanceof AuthError) return;
+        if (message) { message.textContent = e.message; message.hidden = false; }
+      }
+    }
   } finally {
     saving = false;
     updateBar();
   }
+  if (groupsSaved) signature = null; // the groups that were saved are drawn from what the server has
   await load(); // fields that are not on this page are fresh when it is left
 }
 
 function discardAll() {
   if (saving) return;
+  const structure = groupDrafts.size > 0 || groupDeleted.size > 0;
+  groupDrafts.clear();
+  groupDeleted.clear();
   for (const key of [...pending.keys()]) {
     const row = rows.get(key);
     if (row) row.discard(); else pending.delete(key);
   }
+  if (structure) rebuild(); // the groups that were added are gone, the ones that were taken away are back
   updateBar();
 }
 
 // Builds (or refreshes) the page from the schema; used for the data that came with the page and for every poll.
-function show(meta, schema) {
-  lastData = { meta, schema };
+function show(meta, raw) {
+  lastData = { meta, schema: raw };
+  const schema = expand(raw);
   groupMeta = new Map((schema.groups || []).map((g) => [g.key, g]));
   const root = tree(schema.fields);
   let key = routeKey();

@@ -113,10 +113,11 @@ convention used by the demo (and what tuneboard will suggest for a new source).
 
 ## Features and targeting
 
-A `tunables.Feature[T]` is a setting with a switch (`enabled`) and a **targeting** `T`: a struct of `tunables.Rule`s that
-say for whom it is on. A `Rule[V]` is two sets, `Include` ("only these", empty: everybody) and `Exclude` ("all but
-these", wins over `Include`); the options of its tag (`enum`, `source`, `custom`, `minlen`...) are the options of both.
-You declare the targeting yourself, as a struct of Rules, and the info it is checked against, as a struct with a field of
+A `tunables.Feature[T]` is a setting with a switch (`enabled`) and **groups** of targeting: each group is a name and a `T`, a
+struct of `tunables.Rule`s that say for whom it is on. A request is in the targeting when it is in **any** group, and in a group
+when every one of its Rules lets it in; a feature with no group is for everybody. A `Rule[V]` is two sets, `Include` ("only
+these", empty: everybody) and `Exclude` ("all but these", wins over `Include`); the options of its tag (`enum`, `source`,
+`custom`, `minlen`...) are the options of both. You declare the targeting yourself, as a struct of Rules, and the info it is checked against, as a struct with a field of
 the same name for each Rule:
 
 ```go
@@ -128,7 +129,7 @@ type Targeting struct {
 type Info struct {
     Country  string
     Provider string
-    UserID   uint
+    UserID   uint `target:"key"` // who the request is for: a share of the traffic is cut by it (it is a Rule's field as well)
 }
 type Config struct {
     Features struct {
@@ -142,12 +143,28 @@ if t.Get().Features.NewCheckout.IsEnabled(&info) { ... } // enabled, and the inf
 
 That is all a program writes. For a hot path there is a `Matcher` (below): the same answer with no reflection.
 
-- **The page.** The rules sit right in the feature (`features.new_checkout.country.include`), each as one card with
-  one list and a switch **Only** | **Except** in the row of its search (a switch moves what was chosen to the other side; a Rule
-  that holds both, set through the API, shows both lists). Only the rules that hold something are shown: the others are added from a dialog
-  (**Add targeting**, always under the rules: the names and descriptions of the rules, with a search) and taken away
-  with the cross of their card, which empties them. A feature that is off has its targeting folded away, at once when
-  the switch is turned, before it is saved.
+- **The page.** A feature is its switch (`enabled`, in its heading, by the button that folds it) and its groups: each a card with
+  a name that is changed in its heading, its rules, and a cross that takes it away; **Add group** is under them. A group shows
+  the rules that hold something: the others are added from a dialog (**Add targeting**, under the rules of the group; the names
+  and descriptions of the rules, with a search, and a rule that is added comes last). A rule is one list with a switch **Only** | **Except**
+  in the row of its search (the switch moves what was chosen to the other side; a rule that holds both, set through the API, shows both
+  lists). A feature that is off has its groups folded away, at once when the switch is turned, before it is saved.
+  What is added, taken away or changed is kept on the page until **Save**, which sends the groups of a feature as one value.
+- **The API.** The groups of a feature are one value, `features.new_checkout.groups`, a list of `{id, name, percent, random, targeting}` (the same JSON as
+  the store holds): `PUT /values/features.new_checkout.groups` replaces the list and checks every group, the ids (letters, digits, `-`, `_`;
+  made when empty), the values against `enum` and the sources; at most 50 groups. `Set(key, []tunables.Group[T]{...})` does the same from
+  Go, and `Reset` goes back to the groups the program gave in the struct it passed to `New`. A change is one step: a group never
+  exists without its rules for a moment.
+- **A share of the traffic.** A group can be for a part of what its Rules let in: `percent` (0 to 100; all of it when there is none; the
+  page has a button for it by the name of the group: a slider, and how the part is cut, *murmurhash* or *random*). The part is cut by the MurmurHash3 of the *key* of the info, a field tagged `target:"key"` (a
+  user id, a session, a device: a text or a whole number), together with the feature and the group: the same user is always on the
+  same side, a share that grows only takes people in, and two groups of 10% are not the same 10%. A key may have a Rule of its own
+  too, as any field. With no key (the info has none, or it is empty), or with `random` on the group, each check is the luck of
+  the draw. A group that holds out the request lets the next group try, so groups can be a share of one kind of request each.
+- **Metrics.** `tunables.WithObserver(func(tunables.Check))` is told of every call of `IsEnabled` (of a `Feature` or a `Matcher`): the key of the
+  feature, the name of the group that let the request in (its id when it has no name; empty for none), and the answer. The
+  `metrics/prom` module counts them for Prometheus: `tunables.New(cfg, prom.Observer(prometheus.DefaultRegisterer))` gives
+  `tunables_feature_checks_total{feature, group, result}`. A program that has no observer pays nothing.
 - **The info.** Each Rule reads the field of the info with its name: a value of the Rule's type, or a slice of them (the
   languages of a browser: one has to be in, none may be out). A field that holds nothing (an empty text, 0) is *unknown*:
   a Rule that names who is in does not match it, one that only names who is out does. Embedded structs work as in Go,

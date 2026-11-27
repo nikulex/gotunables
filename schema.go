@@ -132,19 +132,21 @@ var uiOptions = map[string][]string{
 const uiPicker = "picker"
 
 type walker struct {
-	seen   map[string]bool
-	fields []*field
-	groups []*group
+	seen      map[string]bool
+	fields    []*field
+	groups    []*group
+	features  []*featureRef // the Features in the struct
+	groupSets []*groupSet   // the Groups of each of them
 }
 
-// walkFields reflects over the struct behind v (which must be addressable) and returns its leaves in
+// walkAll reflects over the struct behind v (which must be addressable) and returns its leaves in
 // declaration order. Defaults are the values already in v; a `default` option overrides (and is written into v).
-func walkFields(t reflect.Type, v reflect.Value) ([]*field, []*group, error) {
+func walkAll(t reflect.Type, v reflect.Value) (*walker, error) {
 	w := &walker{seen: map[string]bool{}}
 	if err := w.walk(t, v, "", nil, 0, nil); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return w.fields, w.groups, nil
+	return w, nil
 }
 
 // inheritedOptions are the options of a KindRule's tag that its two sets take over: they describe the values, which are
@@ -189,6 +191,29 @@ func (w *walker) walk(t reflect.Type, v reflect.Value, prefix string, index []in
 		idx := append(slices.Clone(index), i)
 		fv := v.Field(i)
 
+		if sf.Type.Kind() == reflect.Slice && sf.Type.Elem().Kind() == reflect.Struct {
+			if m, ok := reflect.Zero(sf.Type.Elem()).Interface().(groupMarker); ok { // the Groups of a Feature: one value, a list
+				if name == "" {
+					return fmt.Errorf("tunables: field %s: the groups of a feature need a name", where)
+				}
+				gs, err := newGroupSet(key, prefix, idx, sf.Type, m.groupTargeting())
+				if err != nil {
+					return err
+				}
+				if w.seen[key] {
+					return fmt.Errorf("tunables: duplicate key %q", key)
+				}
+				w.seen[key] = true
+				gs.def = reflect.MakeSlice(sf.Type, 0, 0)
+				if !fv.IsNil() {
+					gs.def = reflect.MakeSlice(sf.Type, fv.Len(), fv.Len())
+					reflect.Copy(gs.def, fv)
+				}
+				w.groupSets = append(w.groupSets, gs)
+				continue
+			}
+		}
+
 		if sf.Type.Kind() == reflect.Struct && sf.Type != timeType {
 			inner := depth // levels inside this struct; an unnamed embedded struct is flattened and adds none
 			if name != "" {
@@ -209,6 +234,9 @@ func (w *walker) walk(t reflect.Type, v reflect.Value, prefix string, index []in
 					}
 				}
 				w.groups = append(w.groups, &group{key: key, name: gname, desc: tag.opts["desc"], rule: kind == kindRule, collapsed: collapsed, feature: kind == kindFeature})
+				if kind == kindFeature {
+					w.features = append(w.features, &featureRef{key: key, index: idx})
+				}
 			}
 			next := inherit
 			if kindOf(sf.Type) == kindRule {

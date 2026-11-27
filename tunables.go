@@ -159,6 +159,7 @@ type options struct {
 	store                    Store
 	log                      *slog.Logger
 	sources                  []*source
+	observer                 func(Check)
 	err                      error // the first mistake in an option (WithSource): New returns it
 }
 
@@ -178,6 +179,13 @@ func WithFile(path string) Option { return WithStore(File(path)) }
 // for the token.
 func WithToken(token string) Option { return func(o *options) { o.token = token } }
 
+// WithObserver is told of every call of IsEnabled of the features of the settings: which feature, which of its groups let the
+// request in (if one did), and the answer. It is how a program counts them; the check itself waits for it, so make it quick. A
+// Matcher reports too. The metrics/prom module has one that counts for Prometheus.
+//
+//	tunables.New(cfg, tunables.WithObserver(func(c tunables.Check) { checks.WithLabelValues(c.Feature, c.Group).Inc() }))
+func WithObserver(fn func(Check)) Option { return func(o *options) { o.observer = fn } }
+
 // WithLogger sets the logger for warnings (default: slog.Default()).
 func WithLogger(l *slog.Logger) Option { return func(o *options) { o.log = l } }
 
@@ -190,6 +198,10 @@ type core struct {
 	defaults reflect.Value // *T holding the defaults
 	opts     options
 	sources  map[string]*source
+
+	features   []*featureRef        // the Features of the settings
+	groupSets  []*groupSet          // the Groups of each
+	groupByKey map[string]*groupSet // by the key of the list: "features.new_checkout.groups"
 
 	mu    sync.Mutex // serializes writes and reloads
 	state atomic.Pointer[snapshot]
@@ -210,29 +222,51 @@ func newCore(typ reflect.Type, initial reflect.Value, o options) (*core, error) 
 	if o.err != nil {
 		return nil, o.err
 	}
-	fields, groups, err := walkFields(typ, cfg.Elem())
+	w, err := walkAll(typ, cfg.Elem())
 	if err != nil {
 		return nil, err
 	}
-	c := &core{typ: typ, fields: fields, groups: groups, byKey: make(map[string]*field, len(fields)), opts: o, sources: make(map[string]*source, len(o.sources))}
+	fields, groups := w.fields, w.groups
+	c := &core{typ: typ, fields: fields, groups: groups, byKey: make(map[string]*field, len(fields)), opts: o, sources: make(map[string]*source, len(o.sources)),
+		features: w.features, groupSets: w.groupSets, groupByKey: make(map[string]*groupSet, len(w.groupSets))}
+	for _, gs := range w.groupSets {
+		c.groupByKey[gs.key] = gs
+	}
 	for _, s := range o.sources {
 		if c.sources[s.name] != nil {
 			return nil, fmt.Errorf("tunables: source %q is registered twice", s.name)
 		}
 		c.sources[s.name] = s
 	}
-	for _, f := range fields { // the sources that imported packages register (RegisterSource), unless the program registered its own under the name
+	leaves := slices.Clone(fields) // the fields of the settings, and the ones of the targeting of each group
+	for _, gs := range c.groupSets {
+		leaves = append(leaves, gs.fields...)
+	}
+	for _, f := range leaves { // the sources that imported packages register (RegisterSource), unless the program registered its own under the name
 		if src, ok := registeredSource(f.source); ok && c.sources[f.source] == nil {
 			c.sources[f.source] = src
 		}
 	}
-	for _, f := range fields {
+	for _, f := range leaves {
 		if err := c.checkSource(f); err != nil {
 			return nil, fmt.Errorf("tunables: field %s: %w", f.key, err)
 		}
 	}
 	for _, f := range fields {
 		c.byKey[f.key] = f
+	}
+	for _, gs := range c.groupSets { // the groups the program gave are checked, and get the ids they lack
+		def := gs.clone(gs.def)
+		for i := 0; i < def.Len(); i++ { // the same ids every time the program starts
+			if id := def.Index(i).Field(groupID); id.String() == "" {
+				id.SetString(fmt.Sprintf("default-%d", i+1))
+			}
+		}
+		if err := gs.check(c, def, true); err != nil {
+			return nil, fmt.Errorf("tunables: %w", err)
+		}
+		gs.def = def
+		cfg.Elem().FieldByIndex(gs.index).Set(def)
 	}
 	c.defaults = reflect.New(typ)
 	c.defaults.Elem().Set(cfg.Elem())
@@ -264,8 +298,14 @@ func (c *core) start(defaults reflect.Value) error {
 			return err
 		}
 	}
-	c.state.Store(&snapshot{cfg: cfg})
+	c.publish(cfg)
 	return nil
+}
+
+// publish makes a config the current one.
+func (c *core) publish(cfg reflect.Value) {
+	c.bind(cfg)
+	c.state.Store(&snapshot{cfg: cfg})
 }
 
 // loadStored builds a config from the defaults plus whatever the Store holds. Invalid saved values fall back
@@ -274,6 +314,9 @@ func (c *core) loadStored() (reflect.Value, error) {
 	// Decode onto a copy that already holds the defaults, so fields missing from the saved data keep them.
 	loaded := reflect.New(c.typ)
 	loaded.Elem().Set(c.defaults.Elem())
+	for _, gs := range c.groupSets { // the stored groups are read onto nothing: a list that is not there keeps the default, one that is replaces it
+		loaded.Elem().FieldByIndex(gs.index).SetZero()
+	}
 	if err := c.opts.store.Load(loaded.Interface()); err != nil {
 		return reflect.Value{}, fmt.Errorf("tunables: load: %w", err)
 	}
@@ -286,6 +329,17 @@ func (c *core) loadStored() (reflect.Value, error) {
 			continue
 		}
 		f.write(cfg.Elem().FieldByIndex(f.index), v)
+	}
+	for _, gs := range c.groupSets {
+		stored := loaded.Elem().FieldByIndex(gs.index)
+		if stored.IsNil() {
+			continue // none saved: the default (it is in cfg already)
+		}
+		groups := gs.clone(stored)
+		if err := gs.check(c, groups, false); err != nil {
+			return reflect.Value{}, err
+		}
+		cfg.Elem().FieldByIndex(gs.index).Set(groups)
 	}
 	return cfg, nil
 }
@@ -300,7 +354,7 @@ func (c *core) reload() {
 		c.opts.log.Warn("tunables: reload failed, keeping the current settings", "error", err)
 		return
 	}
-	c.state.Store(&snapshot{cfg: cfg})
+	c.publish(cfg)
 }
 
 func (c *core) close() {
@@ -339,6 +393,13 @@ func (c *core) lookup(key string) (*field, error) {
 }
 
 func (c *core) set(key string, raw json.RawMessage) error {
+	if gs, ok := c.groupByKey[key]; ok {
+		groups, err := gs.parse(c, raw)
+		if err != nil {
+			return err
+		}
+		return c.commit(func(cfg reflect.Value) { cfg.Elem().FieldByIndex(gs.index).Set(groups) })
+	}
 	f, err := c.lookup(key)
 	if err != nil {
 		return err
@@ -354,6 +415,9 @@ func (c *core) set(key string, raw json.RawMessage) error {
 }
 
 func (c *core) reset(key string) error {
+	if gs, ok := c.groupByKey[key]; ok {
+		return c.commit(func(cfg reflect.Value) { cfg.Elem().FieldByIndex(gs.index).Set(gs.clone(gs.def)) })
+	}
 	f, err := c.lookup(key)
 	if err != nil {
 		return err
@@ -374,6 +438,6 @@ func (c *core) commit(mutate func(cfg reflect.Value)) error {
 			return fmt.Errorf("tunables: save: %w", err)
 		}
 	}
-	c.state.Store(&snapshot{cfg: next})
+	c.publish(next)
 	return nil
 }

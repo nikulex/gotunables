@@ -30,14 +30,14 @@ type Info struct {
 // Targeting is the Rules for Info, with the lists they pick from (see sources.go). Embed it into your own targeting
 // to add Rules of your own.
 type Targeting struct {
-	Country   tunables.Rule[string] `json:"country" tune:"name:Country; desc:Where the address is; source:countries; custom:true"`
-	Region    tunables.Rule[string] `json:"region" tune:"name:Region; desc:As the geo database names it, in lower case; source:regions; custom:true"`
-	City      tunables.Rule[string] `json:"city" tune:"name:City; desc:As the geo database names it, in lower case; source:cities; custom:true"`
-	Languages tunables.Rule[string] `json:"languages" tune:"name:Browser language; desc:One of the languages of the browser has to be in; source:languages; custom:true"`
+	Country   tunables.Rule[string] `json:"country" tune:"name:Country; source:countries; custom:true"`
+	Region    tunables.Rule[string] `json:"region" tune:"name:Region; source:regions; custom:true"`
+	City      tunables.Rule[string] `json:"city" tune:"name:City; source:cities; custom:true"`
+	Languages tunables.Rule[string] `json:"languages" tune:"name:Browser language; source:languages; custom:true"`
 	Browser   tunables.Rule[string] `json:"browser" tune:"name:Browser; source:browsers; custom:true"`
 	OS        tunables.Rule[string] `json:"os" tune:"name:System; source:systems; custom:true"`
 	Device    tunables.Rule[string] `json:"device" tune:"name:Device; source:devices"`
-	Host      tunables.Rule[string] `json:"host" tune:"name:Host; desc:The host that was asked for"`
+	Host      tunables.Rule[string] `json:"host" tune:"name:Host"`
 }
 
 // Option configures NewParser.

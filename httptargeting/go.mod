@@ -4,5 +4,5 @@ go 1.24
 
 require (
 	github.com/mileusna/useragent v1.3.5
-	github.com/nikulex/gotunables v0.5.0
+	github.com/nikulex/gotunables v0.6.0
 )

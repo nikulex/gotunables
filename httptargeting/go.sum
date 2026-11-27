@@ -1,4 +1,4 @@
 github.com/mileusna/useragent v1.3.5 h1:SJM5NzBmh/hO+4LGeATKpaEX9+b4vcGg2qXGLiNGDws=
 github.com/mileusna/useragent v1.3.5/go.mod h1:3d8TOmwL/5I8pJjyVDteHtgDGcefrFUX4ccGOMKNYYc=
-github.com/nikulex/gotunables v0.5.0 h1:vJneTrBxEE28YmnI19MQQf7j8xEkkT/szpF+cLcVudU=
-github.com/nikulex/gotunables v0.5.0/go.mod h1:1nIgNno6B9gOqhR1Dco04zPTPtZeSemZWzVuK7AtgVc=
+github.com/nikulex/gotunables v0.6.0 h1:qufYhfaEoou8k0cTmylmFiLFKBoLlmncAjKnoDXAVZE=
+github.com/nikulex/gotunables v0.6.0/go.mod h1:1nIgNno6B9gOqhR1Dco04zPTPtZeSemZWzVuK7AtgVc=

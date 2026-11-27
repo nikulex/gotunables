@@ -55,6 +55,8 @@ type field struct {
 	source string // the DataSource the ids come from (the item's, for a list or a set)
 	custom bool   // an id the source does not know may be added too (tune:"custom:true"): it is not checked against the source
 	ptr    bool   // a *T: one entry or none (nil); typ is then T
+
+	public bool // the public handler gives it to whoever asks (tune:"public")
 }
 
 // group is a nested struct that has a display name or description.
@@ -82,8 +84,8 @@ type tune struct {
 
 // parseTune parses `tune:"name:Max items; desc:Cart size; default:10; min:1; max:100"`.
 // Options are separated by ";", each is key:value. Known keys: key, name, desc, default, enum, min, max, ui, precision,
-// minlen, maxlen, source, custom, collapsed and flatten (groups only).
-// `tune:"-"` skips the field.
+// minlen, maxlen, source, custom, collapsed and flatten (groups only), and public (a field, or a group: all in it; "public"
+// alone is "public:true"). `tune:"-"` skips the field.
 func parseTune(sf reflect.StructField) (tune, error) {
 	v, ok := sf.Tag.Lookup("tune")
 	if !ok {
@@ -99,14 +101,17 @@ func parseTune(sf reflect.StructField) (tune, error) {
 			continue
 		}
 		k, val, ok := strings.Cut(part, ":")
+		if !ok && strings.EqualFold(part, "public") {
+			k, val, ok = "public", "true", true
+		}
 		if !ok {
 			return tune{}, fmt.Errorf("tune option %q must be key:value", part)
 		}
 		k = strings.ToLower(strings.TrimSpace(k))
 		switch k {
-		case "key", "name", "desc", "default", "enum", "min", "max", "ui", "precision", "minlen", "maxlen", "source", "custom", "collapsed", "flatten":
+		case "key", "name", "desc", "default", "enum", "min", "max", "ui", "precision", "minlen", "maxlen", "source", "custom", "collapsed", "flatten", "public":
 		default:
-			return tune{}, fmt.Errorf("unknown tune option %q (known: key, name, desc, default, enum, min, max, ui, precision, minlen, maxlen, source, custom, collapsed, flatten)", k)
+			return tune{}, fmt.Errorf("unknown tune option %q (known: key, name, desc, default, enum, min, max, ui, precision, minlen, maxlen, source, custom, collapsed, flatten, public)", k)
 		}
 		t.opts[k] = strings.TrimSpace(val)
 	}
@@ -143,7 +148,7 @@ type walker struct {
 // declaration order. Defaults are the values already in v; a `default` option overrides (and is written into v).
 func walkAll(t reflect.Type, v reflect.Value) (*walker, error) {
 	w := &walker{seen: map[string]bool{}}
-	if err := w.walk(t, v, "", nil, 0, nil); err != nil {
+	if err := w.walk(t, v, "", nil, 0, nil, false); err != nil {
 		return nil, err
 	}
 	return w, nil
@@ -153,7 +158,7 @@ func walkAll(t reflect.Type, v reflect.Value) (*walker, error) {
 // the same for both.
 var inheritedOptions = []string{"enum", "min", "max", "precision", "minlen", "maxlen", "source", "custom"}
 
-func (w *walker) walk(t reflect.Type, v reflect.Value, prefix string, index []int, depth int, inherit map[string]string) error {
+func (w *walker) walk(t reflect.Type, v reflect.Value, prefix string, index []int, depth int, inherit map[string]string, public bool) error {
 	for i := 0; i < t.NumField(); i++ {
 		sf := t.Field(i)
 		embeddedStruct := sf.Anonymous && sf.Type.Kind() == reflect.Struct
@@ -186,6 +191,12 @@ func (w *walker) walk(t reflect.Type, v reflect.Value, prefix string, index []in
 		}
 		if strings.Contains(name, ".") {
 			return fmt.Errorf("tunables: field %s: name %q must not contain a dot", where, name)
+		}
+		pub := public // a field says it for itself, a group for what is in it; false takes one out
+		if p, ok := tag.opts["public"]; ok {
+			if pub, err = strconv.ParseBool(p); err != nil {
+				return fmt.Errorf("tunables: field %s: public must be true or false, got %q", where, p)
+			}
 		}
 		key := join(prefix, name) // an unnamed embedded struct is flattened: key == prefix
 		idx := append(slices.Clone(index), i)
@@ -235,7 +246,7 @@ func (w *walker) walk(t reflect.Type, v reflect.Value, prefix string, index []in
 				}
 				w.groups = append(w.groups, &group{key: key, name: gname, desc: tag.opts["desc"], rule: kind == kindRule, collapsed: collapsed, feature: kind == kindFeature})
 				if kind == kindFeature {
-					w.features = append(w.features, &featureRef{key: key, index: idx})
+					w.features = append(w.features, &featureRef{key: key, index: idx, public: pub})
 				}
 			}
 			next := inherit
@@ -247,7 +258,11 @@ func (w *walker) walk(t reflect.Type, v reflect.Value, prefix string, index []in
 					}
 				}
 			}
-			if err := w.walk(sf.Type, fv, key, idx, inner, next); err != nil {
+			inside := pub
+			if kindOf(sf.Type) == kindFeature { // a feature is given as the answer for the request, not as its fields
+				inside = false
+			}
+			if err := w.walk(sf.Type, fv, key, idx, inner, next, inside); err != nil {
 				return err
 			}
 			continue
@@ -276,6 +291,7 @@ func (w *walker) walk(t reflect.Type, v reflect.Value, prefix string, index []in
 		}
 		w.seen[key] = true
 
+		f.public = pub
 		f.def = f.read(fv)
 		if d, ok := tag.opts["default"]; ok {
 			dv, err := f.parseText(d)

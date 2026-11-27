@@ -186,6 +186,26 @@ a module of its own, `github.com/nikulex/gotunables/httptargeting`, so that this
 database file and the ISO lists are two more modules beside it, `httptargeting/geo/mmdb` and `httptargeting/geo/iso`). Its
 `Info` and `Targeting` work with `Feature` and `Matcher` as any you declare yourself, and are embedded into your own to extend them.
 
+## Public settings (for a front end)
+
+A setting is private unless its tag says `public` (`tune:"public"`, or `public:true`): on a field, or on a struct, for everything in it
+(`public:false` on a field in it takes it out again). `t.PublicHandler(info)` is a read-only `http.Handler` that gives those, as JSON
+in the shape of the settings; a public `Feature` is given as whether it is on *for this request* (`info` makes what it is asked
+about from the request): never its groups or rules.
+
+```go
+Banner   string `json:"banner" tune:"public"`
+Features struct {
+    NewCheckout tunables.Feature[Targeting] `json:"new_checkout" tune:"public"`
+} `json:"features"`
+
+mux.Handle("GET /api/public", t.PublicHandler(func(r *http.Request) any { return NewInfo(r) }))
+// {"banner": "…", "features": {"new_checkout": true}}
+```
+
+The handler has no authorization: mount it where the front end can reach it. Its answers are `Cache-Control: no-store`, since a feature
+is on for some requests and off for others.
+
 ## Storage
 
 Without a store, changes live in memory. A store keeps **the struct itself**:

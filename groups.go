@@ -32,8 +32,9 @@ const (
 
 // featureRef is a Feature in the settings struct: where it is, and what it is called.
 type featureRef struct {
-	key   string
-	index []int
+	key    string
+	index  []int
+	public bool // the public handler says whether it is on for the request (tune:"public")
 }
 
 // groupSet is the Groups of one Feature: a list of named targetings that is kept, read and changed as one value

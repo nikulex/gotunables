@@ -97,6 +97,22 @@ button,input,textarea{font-family:inherit}
 .chip-add{flex:none}
 .slider-input{flex:none;width:auto;padding:0 10px;text-align:right;font-variant-numeric:tabular-nums}
 
+/* ---- Picker: entries of a data source, chosen as chips, searched in an input with a list under it ---- */
+.picker{display:flex;flex-direction:column;align-items:flex-start;gap:10px;width:100%}
+.picker-input{width:100%;max-width:24rem}
+.avatar{display:inline-flex;flex:none;align-items:center;justify-content:center;width:24px;height:24px;border-radius:9999px;background:hsl(var(--muted));color:hsl(var(--muted-foreground));font-size:11px;line-height:1;font-weight:600;object-fit:cover;overflow:hidden}
+.chip.has-avatar{padding-left:3px;gap:6px}
+.chip-sub{color:hsl(var(--muted-foreground));font-weight:400;font-size:12px}
+.chip.missing{color:hsl(var(--muted-foreground));background:hsl(var(--muted));font-weight:400}
+.pick-item{display:flex;align-items:center;gap:10px;border-radius:calc(var(--radius) - 4px);padding:6px 8px;font-size:14px;line-height:20px;cursor:pointer;user-select:none}
+.pick-item:hover,.pick-item.active{background:hsl(var(--accent));color:hsl(var(--accent-foreground))}
+.pick-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pick-id{flex:none;color:hsl(var(--muted-foreground));font-size:12px;font-variant-numeric:tabular-nums}
+.pick-check{flex:none;display:flex;width:16px;height:16px}
+.pick-check svg{width:16px;height:16px}
+.pick-note{padding:10px 8px;font-size:14px;line-height:20px;color:hsl(var(--muted-foreground))}
+.pick-note.error{color:hsl(var(--destructive))}
+
 /* ---- Counter: the quantity control of the shop (plus | input | minus), joined ---- */
 .counter{display:flex;flex:none;justify-content:space-between}
 .btn.counter-btn{background:hsl(var(--grey));color:hsl(var(--secondary-foreground))}
@@ -622,6 +638,222 @@ function Chips(f, onChange) {
   return { el: root, set(v) { items = isSet ? [...v].sort(order) : [...v]; render(); } };
 }
 
+// Entries of a data source: the ids a setting holds, chosen from a list that opens under an input as you type. The
+// setting keeps only ids (a set or a list of them, or one that may be null); the names and pictures are asked of the
+// source: /items for the chosen ones, /search for the list.
+const entries = new Map(); // "source id" -> {id, name, image}, what the source said, kept for the chips
+const entryKey = (source, id) => source + "\u0000" + id;
+const safeImage = (src) => (/^(https:\/\/|data:image\/)/i.test(src || "") ? src : "");
+
+function Avatar(entry) {
+  const fallback = () => el("span", { className: "avatar", textContent: ([...(entry.name || "")][0] || "#").toUpperCase() });
+  const src = safeImage(entry.image);
+  if (!src) return fallback();
+  const img = el("img", { className: "avatar", src, alt: "", width: 24, height: 24, loading: "lazy", referrerPolicy: "no-referrer" });
+  img.onerror = () => img.replaceWith(fallback()); // a picture that does not load is a letter
+  return img;
+}
+
+function Picker(f, onChange) {
+  const multi = f.type === "set" || f.type === "list";
+  const kind = multi ? f.item : f.type; // "int" or "string"
+  const order = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+  let ids = [];
+  let ready = false; // the chosen ones are looked up once, then only the new ones
+  const known = (id) => entries.get(entryKey(f.source, id));
+  const full = () => multi && f.maxlen != null && ids.length >= f.maxlen;
+  const value = () => (multi ? ids.slice() : ids.length ? ids[0] : null);
+
+  const chips = el("div", { className: "chips" });
+  const input = Input({ className: "picker-input", placeholder: "Search…", autocomplete: "off", spellcheck: false });
+  input.setAttribute("role", "combobox");
+  input.setAttribute("aria-autocomplete", "list");
+  input.setAttribute("aria-expanded", "false");
+  const root = el("div", { className: "picker" }, chips, input);
+
+  function render() {
+    chips.replaceChildren();
+    if (ids.length === 0) chips.append(el("span", { className: "chips-empty", textContent: multi ? "No items" : "Nobody chosen" }));
+    for (const id of ids) {
+      const e = known(id);
+      const kids = e
+        ? [Avatar(e), el("span", { textContent: e.name }), el("span", { className: "chip-sub", textContent: "#" + id })]
+        : [el("span", { textContent: "#" + id + (lookedUp.has(id) ? " (not found)" : "") })];
+      const chip = el("span", { className: "chip has-avatar" + (e ? "" : " missing") }, ...kids);
+      if (multi || f.optional) {
+        const rm = el("button", { type: "button", className: "chip-x", ariaLabel: "Remove " + (e ? e.name : id) }, icon("luX"));
+        rm.onclick = () => { ids = ids.filter((x) => x !== id); render(); onChange(value()); };
+        chip.append(rm);
+      }
+      chips.append(chip);
+    }
+    input.disabled = full();
+    input.placeholder = full() ? "The limit is reached" : multi || ids.length === 0 ? "Search…" : "Search to change…";
+  }
+
+  // the names of the chosen ids that are not known yet
+  const lookedUp = new Set(); // ids the source was asked about
+  async function resolve() {
+    const need = ids.filter((id) => !known(id) && !lookedUp.has(id));
+    for (let i = 0; i < need.length; i += 50) {
+      const part = need.slice(i, i + 50);
+      try {
+        const data = await api("GET", "sources/" + encodeURIComponent(f.source) + "/items?" + part.map((id) => "id=" + encodeURIComponent(id)).join("&"));
+        for (const e of data.items) entries.set(entryKey(f.source, e.id), e);
+        part.forEach((id) => lookedUp.add(id)); // the ones the source did not return are drawn as not found
+      } catch (e) {
+        if (e instanceof AuthError) return;
+        // the source is not reachable: the ids stay as they are, and are asked again next time
+      }
+    }
+    render();
+  }
+
+  // ---- the list under the input ----
+  let menu = null;
+  let results = [];
+  let state = "idle"; // idle | loading | error
+  let active = -1;
+  let pointer = { x: -1, y: -1 };
+  let timer = 0;
+  let ctrl = null;
+  let seq = 0;
+
+  function place() {
+    if (!menu) return;
+    const r = input.getBoundingClientRect();
+    menu.style.minWidth = r.width + "px";
+    const room = innerHeight - r.bottom - 8;
+    const above = r.top - 8;
+    const h = Math.min(menu.scrollHeight, 320);
+    const up = h > room && above > room;
+    menu.dataset.side = up ? "top" : "bottom";
+    menu.style.maxHeight = Math.min(320, up ? above : room) + "px";
+    menu.style.left = Math.max(8, Math.min(r.left, innerWidth - menu.offsetWidth - 8)) + "px";
+    menu.style.top = (up ? r.top - Math.min(h, above) - 4 : r.bottom + 4) + "px";
+  }
+
+  function renderMenu() {
+    if (!menu) return;
+    const view = menu.firstChild;
+    view.replaceChildren();
+    results.forEach((e, i) => {
+      const chosen = ids.includes(e.id);
+      const row = el("div", { className: "pick-item" + (i === active ? " active" : ""), role: "option", id: "pick-" + f.key + "-" + i },
+        Avatar(e), el("span", { className: "pick-name", textContent: e.name }), el("span", { className: "pick-id", textContent: "#" + e.id }),
+        el("span", { className: "pick-check" }));
+      row.setAttribute("aria-selected", String(chosen));
+      if (chosen) row.querySelector(".pick-check").append(icon("check"));
+      row.onpointerdown = (ev) => ev.preventDefault(); // the input keeps its focus
+      row.onclick = () => choose(e);
+      row.onmousemove = (ev) => { // only a real move of the mouse: the browser also fires it when the list changes under a still pointer
+        if (ev.clientX === pointer.x && ev.clientY === pointer.y) return;
+        pointer = { x: ev.clientX, y: ev.clientY };
+        if (active !== i) { active = i; renderMenu(); }
+      };
+      view.append(row);
+    });
+    if (state === "error") view.append(el("div", { className: "pick-note error", textContent: "Could not search the source" }));
+    else if (results.length === 0) view.append(el("div", { className: "pick-note", textContent: state === "loading" ? "Searching…" : "Nothing found" }));
+    if (active >= 0) input.setAttribute("aria-activedescendant", "pick-" + f.key + "-" + active); else input.removeAttribute("aria-activedescendant");
+    place();
+  }
+
+  function search(delay) {
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      ctrl?.abort(); // an answer to what was typed before is of no use any more
+      ctrl = new AbortController();
+      const mine = ++seq;
+      state = "loading";
+      renderMenu();
+      try {
+        const data = await api("GET", "sources/" + encodeURIComponent(f.source) + "/search?limit=20&q=" + encodeURIComponent(input.value.trim()), undefined, ctrl.signal);
+        if (mine !== seq) return;
+        results = data.items;
+        results.forEach((e) => entries.set(entryKey(f.source, e.id), e));
+        state = "idle";
+        active = results.length ? 0 : -1;
+      } catch (e) {
+        if (e.name === "AbortError" || e instanceof AuthError || mine !== seq) return;
+        results = [];
+        state = "error";
+      }
+      renderMenu();
+    }, delay);
+  }
+
+  const outside = (e) => { if (menu && !menu.contains(e.target) && e.target !== input) close(); };
+  const onScroll = (e) => { if (menu && !menu.contains(e.target)) close(); };
+  function open() {
+    if (menu || input.disabled) return;
+    menu = el("div", { className: "select-content", role: "listbox" }, el("div", { className: "select-viewport" }));
+    document.body.append(menu);
+    input.setAttribute("aria-expanded", "true");
+    document.addEventListener("pointerdown", outside, true);
+    addEventListener("resize", close);
+    addEventListener("scroll", onScroll, true);
+    renderMenu();
+    search(0);
+  }
+  function close() {
+    if (!menu) return;
+    clearTimeout(timer);
+    ctrl?.abort();
+    seq++;
+    menu.remove();
+    menu = null;
+    results = [];
+    state = "idle";
+    active = -1;
+    input.setAttribute("aria-expanded", "false");
+    input.removeAttribute("aria-activedescendant");
+    document.removeEventListener("pointerdown", outside, true);
+    removeEventListener("resize", close);
+    removeEventListener("scroll", onScroll, true);
+  }
+
+  function choose(e) {
+    entries.set(entryKey(f.source, e.id), e);
+    if (multi) {
+      if (ids.includes(e.id)) ids = ids.filter((x) => x !== e.id);
+      else if (!full()) { ids = [...ids, e.id]; if (f.type === "set") ids.sort(order); }
+    } else {
+      ids = [e.id];
+    }
+    input.value = "";
+    close();
+    render();
+    onChange(value());
+  }
+
+  input.addEventListener("focus", open);
+  input.addEventListener("click", open);
+  input.addEventListener("input", () => { if (!menu) open(); else search(250); });
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!menu) return open();
+      if (results.length) { active = (active + (e.key === "ArrowDown" ? 1 : -1) + results.length) % results.length; renderMenu(); menu.querySelector(".active")?.scrollIntoView({ block: "nearest" }); }
+    } else if (e.key === "Enter") {
+      if (menu && active >= 0 && results[active]) { e.preventDefault(); choose(results[active]); }
+    } else if (e.key === "Escape") {
+      if (menu) { e.preventDefault(); close(); }
+    } else if (e.key === "Tab") close();
+  });
+
+  render();
+  return {
+    el: root,
+    set(v) {
+      ids = multi ? [...v] : v == null ? [] : [v];
+      if (f.type === "set") ids.sort(order);
+      render();
+      resolve();
+    },
+  };
+}
+
 // The quantity control of the shop: plus | input | minus, joined.
 function Counter({ type, decimals, min, max, step, onChange }) {
   const round = (v) => Math.round(v * 1e10) / 1e10;
@@ -675,12 +907,12 @@ function niceStep(span) {
 // ---- page ----
 
 // Relative URLs, so the page works under any mount prefix.
-async function api(method, path, body) {
+async function api(method, path, body, signal) {
   const headers = {};
   if (token) headers.Authorization = "Bearer " + token;
   if (body !== undefined) headers["Content-Type"] = "application/json";
   const res = await fetch(path, {
-    method, headers, cache: "no-store",
+    method, headers, cache: "no-store", signal,
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (res.status === 401) { showAuth(); throw new AuthError(); }
@@ -835,6 +1067,11 @@ function makeRow(name, f) {
     block = true;
     setValue = c.set;
     ctl.append(c.el);
+  } else if (ui === "picker") {
+    const c = Picker(f, stage);
+    block = true;
+    setValue = c.set;
+    ctl.append(c.el);
   } else if (ui === "textarea") {
     const c = Textarea(stage);
     block = true;
@@ -871,14 +1108,14 @@ function makeRow(name, f) {
   }
 
   const root = el("div", { className: "field" + (block ? " field-block" : "") }, text, ctl);
-  root.title = "default: " + f.default;
+  root.title = "default: " + (f.default ?? "nobody");
 
   // The server's view changed (after Save or the periodic refresh): keep unsaved edits, update the rest.
   function apply(next) {
     f = next;
     if (pending.has(f.key) && same(pending.get(f.key), f.value)) pending.delete(f.key);
     if (!pending.has(f.key) && !root.contains(document.activeElement)) setValue(f.value);
-    root.title = "default: " + f.default;
+    root.title = "default: " + (f.default ?? "nobody");
     mark();
   }
   // Drop this row's unsaved edit.

@@ -2,9 +2,14 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"reflect"
+	"sync"
 	"time"
 
 	tunables "github.com/nikulex/gotunables"
@@ -34,6 +39,13 @@ type Features struct {
 		Ratios  []float32            `json:"ratios" tune:"desc:Weights; min:0; max:1; precision:2; default:0.25,0.5"`
 	} `json:"access" tune:"desc:Lists and sets"`
 
+	// The people are picked by name from a data source: the setting holds only their ids.
+	People struct {
+		Owner     *int              `json:"owner" tune:"source:people; desc:One person, or nobody"`
+		Reviewers tunables.Set[int] `json:"reviewers" tune:"source:people; desc:Any number of people; maxlen:6; default:1,3"`
+		Rotation  []int             `json:"rotation" tune:"source:people; desc:The same person may come twice, the order matters"`
+	} `json:"people" tune:"name:People; desc:Picked from a data source: the users of dummyjson.com"`
+
 	Retry struct {
 		Count  int `yaml:"count" tune:"default:3; min:0; max:10"`
 		Policy struct {
@@ -56,6 +68,7 @@ func main() {
 		Features{},
 		tunables.WithName(name),
 		tunables.WithDescription(description),
+		tunables.WithSource("people", people()),
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -75,4 +88,76 @@ func main() {
 
 	log.Println("settings UI: http://127.0.0.1:6767/")
 	log.Fatal(http.ListenAndServe("127.0.0.1:6767", t.Handler()))
+}
+
+// people is a data source over a public test API (https://dummyjson.com/users: 208 made-up users with pictures).
+// Search asks the API's own search; Get takes the entries from the whole list, read once.
+func people() tunables.DataSource[int] {
+	const base = "https://dummyjson.com/users"
+	client := &http.Client{Timeout: 4 * time.Second}
+	fetch := func(ctx context.Context, u string) ([]tunables.Item[int], error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("dummyjson: %s", resp.Status)
+		}
+		var body struct {
+			Users []struct {
+				ID        int    `json:"id"`
+				FirstName string `json:"firstName"`
+				LastName  string `json:"lastName"`
+				Image     string `json:"image"`
+			} `json:"users"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+			return nil, err
+		}
+		items := make([]tunables.Item[int], len(body.Users))
+		for i, u := range body.Users {
+			items[i] = tunables.Item[int]{ID: u.ID, Name: u.FirstName + " " + u.LastName, ImageSrc: u.Image}
+		}
+		return items, nil
+	}
+	const fields = "&select=id,firstName,lastName,image"
+
+	var (
+		mu  sync.Mutex
+		all map[int]tunables.Item[int]
+	)
+	return tunables.DataSource[int]{
+		Search: func(ctx context.Context, query string, limit int) ([]tunables.Item[int], error) {
+			if query == "" {
+				return fetch(ctx, fmt.Sprintf("%s?limit=%d%s", base, limit, fields))
+			}
+			return fetch(ctx, fmt.Sprintf("%s/search?q=%s&limit=%d%s", base, url.QueryEscape(query), limit, fields))
+		},
+		Get: func(ctx context.Context, ids []int) ([]tunables.Item[int], error) {
+			mu.Lock()
+			defer mu.Unlock()
+			if all == nil {
+				list, err := fetch(ctx, base+"?limit=0"+fields)
+				if err != nil {
+					return nil, err
+				}
+				all = make(map[int]tunables.Item[int], len(list))
+				for _, it := range list {
+					all[it.ID] = it
+				}
+			}
+			var out []tunables.Item[int]
+			for _, id := range ids {
+				if it, ok := all[id]; ok {
+					out = append(out, it)
+				}
+			}
+			return out, nil
+		},
+	}
 }

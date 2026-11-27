@@ -1,12 +1,14 @@
 package tunables
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"html"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/nikulex/gotunables/ui"
@@ -22,6 +24,8 @@ const protocol = 1
 //	GET    /schema        {fields: [{key, type, desc, default, value, modified, enum, min, max}]}
 //	PUT    /values/{key}  {"value": ...}  -> the updated field
 //	DELETE /values/{key}  back to the default -> the updated field
+//	GET    /sources/{name}/search?q=&limit=  the entries of a data source that match -> {items: [{id, name, image}]}
+//	GET    /sources/{name}/items?id=&id=     the entries of these ids -> {items: [...]} (the ones that exist)
 //
 // Mount it under a prefix with http.StripPrefix and a trailing slash:
 //
@@ -48,6 +52,8 @@ type fieldDTO struct {
 	Max       any      `json:"max,omitempty"`
 	MinLen    *int     `json:"minlen,omitempty"` // a list or a set: how many items
 	MaxLen    *int     `json:"maxlen,omitempty"`
+	Source    string   `json:"source,omitempty"`   // the entries are picked from this data source (GET /sources/{source}/search and /items)
+	Optional  bool     `json:"optional,omitempty"` // one entry or none: the value may be null
 }
 
 func (c *core) handler() http.Handler {
@@ -57,6 +63,8 @@ func (c *core) handler() http.Handler {
 	mux.HandleFunc("GET /schema", c.guard(false, c.handleSchema))
 	mux.HandleFunc("PUT /values/{key}", c.guard(true, c.handlePut))
 	mux.HandleFunc("DELETE /values/{key}", c.guard(true, c.handleDelete))
+	mux.HandleFunc("GET /sources/{name}/search", c.guard(false, c.handleSourceSearch))
+	mux.HandleFunc("GET /sources/{name}/items", c.guard(false, c.handleSourceItems))
 	return mux
 }
 
@@ -64,7 +72,7 @@ func (c *core) serveUI(w http.ResponseWriter, _ *http.Request) {
 	h := w.Header()
 	h.Set("Content-Type", "text/html; charset=utf-8")
 	h.Set("Cache-Control", "no-store")
-	h.Set("Content-Security-Policy", "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'")
+	h.Set("Content-Security-Policy", "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src https: data:")
 	h.Set("X-Content-Type-Options", "nosniff")
 	if _, err := w.Write(c.page()); err != nil {
 		c.opts.log.Warn("tunables: write ui", "error", err)
@@ -203,7 +211,7 @@ type groupDTO struct {
 func (c *core) dto(f *field, s *snapshot) fieldDTO {
 	cur := f.read(s.cfg.Elem().FieldByIndex(f.index))
 	item := f // the field that holds the enum and the bounds: the item of a list or a set
-	d := fieldDTO{MinLen: f.minLen, MaxLen: f.maxLen}
+	d := fieldDTO{MinLen: f.minLen, MaxLen: f.maxLen, Source: f.source, Optional: f.ptr}
 	if f.collection() {
 		item = f.elem
 		d.Item = item.apiType()
@@ -225,4 +233,76 @@ func (c *core) writeJSON(w http.ResponseWriter, status int, v any) {
 
 func (c *core) writeError(w http.ResponseWriter, status int, msg string) {
 	c.writeJSON(w, status, map[string]string{"error": msg})
+}
+
+// handleSourceSearch asks a data source for the entries that match what was typed.
+func (c *core) handleSourceSearch(w http.ResponseWriter, r *http.Request) {
+	src, ok := c.sources[r.PathValue("name")]
+	if !ok {
+		c.writeError(w, http.StatusNotFound, "unknown source")
+		return
+	}
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if rs := []rune(q); len(rs) > sourceMaxQuery {
+		q = string(rs[:sourceMaxQuery])
+	}
+	limit := sourceDefLimit
+	if s := r.URL.Query().Get("limit"); s != "" {
+		if n, err := strconv.Atoi(s); err == nil {
+			limit = min(max(n, 1), sourceMaxLimit)
+		}
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), sourceTimeout)
+	defer cancel()
+	items, err := src.search(ctx, q, limit)
+	if err != nil {
+		c.opts.log.Error("tunables: source search failed", "source", src.name, "error", err)
+		c.writeError(w, http.StatusBadGateway, "the source did not answer")
+		return
+	}
+	c.writeJSON(w, http.StatusOK, map[string]any{"items": cut(items, limit)})
+}
+
+// handleSourceItems finds the entries of the ids a setting holds, to show them by name and picture.
+func (c *core) handleSourceItems(w http.ResponseWriter, r *http.Request) {
+	src, ok := c.sources[r.PathValue("name")]
+	if !ok {
+		c.writeError(w, http.StatusNotFound, "unknown source")
+		return
+	}
+	texts := r.URL.Query()["id"]
+	if len(texts) > sourceMaxItemIDs {
+		c.writeError(w, http.StatusBadRequest, "too many ids")
+		return
+	}
+	ids := make([]any, 0, len(texts))
+	for _, t := range texts {
+		id, err := src.parseID(t)
+		if err != nil {
+			c.writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		c.writeJSON(w, http.StatusOK, map[string]any{"items": []sourceItem{}})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), sourceTimeout)
+	defer cancel()
+	items, err := src.get(ctx, ids)
+	if err != nil {
+		c.opts.log.Error("tunables: source get failed", "source", src.name, "error", err)
+		c.writeError(w, http.StatusBadGateway, "the source did not answer")
+		return
+	}
+	c.writeJSON(w, http.StatusOK, map[string]any{"items": cut(items, len(ids))})
+}
+
+// cut keeps at most n entries of what a data source returned (never nil: the page reads an array).
+func cut(items []sourceItem, n int) []sourceItem {
+	if items == nil {
+		return []sourceItem{}
+	}
+	return items[:min(len(items), n)]
 }

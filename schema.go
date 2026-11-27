@@ -51,6 +51,9 @@ type field struct {
 
 	elem           *field // a list or a set: the field of one item (kind, enum, min, max, precision)
 	minLen, maxLen *int   // a list or a set: how many items
+
+	source string // the DataSource the ids come from (the item's, for a list or a set)
+	ptr    bool   // a *T: one entry or none (nil); typ is then T
 }
 
 // group is a nested struct that has a display name or description.
@@ -73,7 +76,7 @@ type tune struct {
 
 // parseTune parses `tune:"name:Max items; desc:Cart size; default:10; min:1; max:100"`.
 // Options are separated by ";", each is key:value. Known keys: key, name, desc, default, enum, min, max, ui, precision,
-// minlen, maxlen.
+// minlen, maxlen, source.
 // `tune:"-"` skips the field.
 func parseTune(sf reflect.StructField) (tune, error) {
 	v, ok := sf.Tag.Lookup("tune")
@@ -95,9 +98,9 @@ func parseTune(sf reflect.StructField) (tune, error) {
 		}
 		k = strings.ToLower(strings.TrimSpace(k))
 		switch k {
-		case "key", "name", "desc", "default", "enum", "min", "max", "ui", "precision", "minlen", "maxlen":
+		case "key", "name", "desc", "default", "enum", "min", "max", "ui", "precision", "minlen", "maxlen", "source":
 		default:
-			return tune{}, fmt.Errorf("unknown tune option %q (known: key, name, desc, default, enum, min, max, ui, precision, minlen, maxlen)", k)
+			return tune{}, fmt.Errorf("unknown tune option %q (known: key, name, desc, default, enum, min, max, ui, precision, minlen, maxlen, source)", k)
 		}
 		t.opts[k] = strings.TrimSpace(val)
 	}
@@ -118,6 +121,9 @@ var uiOptions = map[string][]string{
 	kindList:     {"chips"},
 	kindSet:      {"chips"},
 }
+
+// uiPicker is the component of a field that picks from a DataSource.
+const uiPicker = "picker"
 
 type walker struct {
 	seen   map[string]bool
@@ -278,20 +284,28 @@ func scalarKind(t reflect.Type) (string, error) {
 }
 
 func newField(sf reflect.StructField, key string, index []int, tag tune) (*field, error) {
-	f := &field{key: key, index: index, typ: sf.Type, name: tag.opts["name"], desc: tag.opts["desc"]}
+	typ := sf.Type
+	f := &field{key: key, index: index, typ: typ, name: tag.opts["name"], desc: tag.opts["desc"], source: tag.opts["source"]}
+	if typ.Kind() == reflect.Pointer && f.source != "" { // one entry or none
+		typ = typ.Elem()
+		f.typ, f.ptr = typ, true
+	}
 
 	// target is the field the value options (enum, min, max, precision) belong to: the field itself, or the
 	// item of a list or a set
 	target := f
-	if m, ok := reflect.Zero(sf.Type).Interface().(setMarker); ok {
+	if m, ok := reflect.Zero(typ).Interface().(setMarker); ok {
 		f.kind = kindSet
 		f.elem = &field{key: key, typ: m.setElem()}
-	} else if sf.Type.Kind() == reflect.Slice {
-		if sf.Type.Elem().Kind() == reflect.Uint8 {
+	} else if typ.Kind() == reflect.Slice {
+		if typ.Elem().Kind() == reflect.Uint8 {
 			return nil, fmt.Errorf("unsupported type %s: bytes are not settings (tag it `tune:\"-\"` to skip)", sf.Type)
 		}
 		f.kind = kindList
-		f.elem = &field{key: key, typ: sf.Type.Elem()}
+		f.elem = &field{key: key, typ: typ.Elem()}
+	}
+	if f.ptr && f.collection() {
+		return nil, fmt.Errorf("a pointer to %s is not a setting: a list or a set is empty or not, it needs no pointer", typ)
 	}
 	if f.collection() {
 		k, err := scalarKind(f.elem.typ)
@@ -301,7 +315,7 @@ func newField(sf reflect.StructField, key string, index []int, tag tune) (*field
 		f.elem.kind = k
 		target = f.elem
 	} else {
-		k, err := scalarKind(sf.Type)
+		k, err := scalarKind(typ)
 		if err != nil {
 			return nil, err
 		}
@@ -385,7 +399,19 @@ func newField(sf reflect.StructField, key string, index []int, tag tune) (*field
 		return nil, fmt.Errorf("minlen is greater than maxlen")
 	}
 
+	if f.source != "" {
+		if k := target.kind; k != kindInt && k != kindUint && k != kindString {
+			return nil, fmt.Errorf("source is only for ids: an integer or a string, not %s", k)
+		}
+		if target.min != nil || target.max != nil || target.prec != nil {
+			return nil, fmt.Errorf("min, max and precision do not go with source")
+		}
+	}
+
 	allowed := uiOptions[f.apiType()]
+	if f.source != "" {
+		allowed = []string{uiPicker}
+	}
 	f.ui = allowed[0]
 	if u, ok := tag.opts["ui"]; ok {
 		if !slices.Contains(allowed, u) {
@@ -401,6 +427,14 @@ func newField(sf reflect.StructField, key string, index []int, tag tune) (*field
 
 // read returns the canonical value of the field in fv.
 func (f *field) read(fv reflect.Value) any {
+	if f.ptr { // one entry or none: nil
+		if fv.IsNil() {
+			return nil
+		}
+		g := *f
+		g.ptr = false
+		return g.read(fv.Elem())
+	}
 	switch f.kind {
 	case kindList:
 		out := make([]any, fv.Len())
@@ -438,6 +472,18 @@ func (f *field) read(fv reflect.Value) any {
 
 // write stores a canonical value (already validated) into fv.
 func (f *field) write(fv reflect.Value, v any) {
+	if f.ptr {
+		if v == nil {
+			fv.SetZero()
+			return
+		}
+		g := *f
+		g.ptr = false
+		p := reflect.New(f.typ)
+		g.write(p.Elem(), v)
+		fv.Set(p)
+		return
+	}
 	switch f.kind {
 	case kindList:
 		items := v.([]any)
@@ -604,6 +650,9 @@ func (f *field) same(a, b any) bool {
 // parse validates a JSON value for this field and returns it in canonical form.
 func (f *field) parse(raw json.RawMessage) (any, error) {
 	if s := strings.TrimSpace(string(raw)); s == "" || s == "null" {
+		if f.ptr && s == "null" { // nothing chosen
+			return nil, nil
+		}
 		return nil, fmt.Errorf("expected %s", f.apiType())
 	}
 	if f.collection() {
@@ -659,6 +708,9 @@ func (f *field) parse(raw json.RawMessage) (any, error) {
 
 // check validates a canonical value against enum and min/max.
 func (f *field) check(v any) error {
+	if v == nil { // a pointer with nothing chosen
+		return nil
+	}
 	if f.collection() {
 		items := v.([]any)
 		if err := f.checkLen(len(items)); err != nil {

@@ -17,7 +17,9 @@
 //
 // Supported field types: bool, string (optionally an enum), signed and unsigned integers of every size, floats
 // (float32, float64) and time.Duration; a slice []T or a Set[T] of any of those (the options below then
-// apply to each item); nested and embedded structs become groups.
+// apply to each item); nested and embedded structs become groups. An integer or a string (also a slice or a Set of
+// them, or a pointer: one or none) that holds ids of things from elsewhere takes `source:name` and is chosen by
+// searching a DataSource, see WithSource.
 //
 // The key of a field is taken from its json tag, then yaml, then the lower-cased Go name (`json:"-"` skips
 // it). Everything else goes into one tag, `tune`, as `key:value` options separated by ";":
@@ -29,6 +31,7 @@
 //	enum     allowed values of a string field: enum:blue,green,red
 //	min,max  bounds of a number; durations like min:10ms (for a list or a set: of each item)
 //	minlen,maxlen  how many items a list or a set may hold
+//	source   the DataSource the ids are picked from (registered with WithSource)
 //
 // `tune:"-"` skips a field.
 package tunables
@@ -112,6 +115,11 @@ func wireValue(v reflect.Value) any {
 		return time.Duration(v.Int()).String()
 	}
 	switch v.Kind() {
+	case reflect.Pointer: // a setting of one entry or none
+		if v.IsNil() {
+			return nil
+		}
+		return wireValue(v.Elem())
 	case reflect.Slice:
 		if v.IsNil() {
 			return []any{}
@@ -149,6 +157,8 @@ type options struct {
 	name, description, token string
 	store                    Store
 	log                      *slog.Logger
+	sources                  []*source
+	err                      error // the first mistake in an option (WithSource): New returns it
 }
 
 // WithName sets the source name shown in the UI and in /meta (default: the executable name).
@@ -178,6 +188,7 @@ type core struct {
 	byKey    map[string]*field
 	defaults reflect.Value // *T holding the defaults
 	opts     options
+	sources  map[string]*source
 
 	mu    sync.Mutex // serializes writes and reloads
 	state atomic.Pointer[snapshot]
@@ -195,11 +206,25 @@ func newCore(typ reflect.Type, initial reflect.Value, o options) (*core, error) 
 	cfg := reflect.New(typ)
 	cfg.Elem().Set(initial)
 
+	if o.err != nil {
+		return nil, o.err
+	}
 	fields, groups, err := walkFields(typ, cfg.Elem())
 	if err != nil {
 		return nil, err
 	}
-	c := &core{typ: typ, fields: fields, groups: groups, byKey: make(map[string]*field, len(fields)), opts: o}
+	c := &core{typ: typ, fields: fields, groups: groups, byKey: make(map[string]*field, len(fields)), opts: o, sources: make(map[string]*source, len(o.sources))}
+	for _, s := range o.sources {
+		if c.sources[s.name] != nil {
+			return nil, fmt.Errorf("tunables: source %q is registered twice", s.name)
+		}
+		c.sources[s.name] = s
+	}
+	for _, f := range fields {
+		if err := c.checkSource(f); err != nil {
+			return nil, fmt.Errorf("tunables: field %s: %w", f.key, err)
+		}
+	}
 	for _, f := range fields {
 		c.byKey[f.key] = f
 	}
@@ -280,6 +305,25 @@ func (c *core) close() {
 	})
 }
 
+// checkSource makes sure the data source of a field is registered and has the type of its ids.
+func (c *core) checkSource(f *field) error {
+	if f.source == "" {
+		return nil
+	}
+	src, ok := c.sources[f.source]
+	if !ok {
+		return fmt.Errorf("source %q is not registered (see WithSource)", f.source)
+	}
+	item := f
+	if f.collection() {
+		item = f.elem
+	}
+	if item.typ != src.idType {
+		return fmt.Errorf("source %q has ids of type %s, the field holds %s", f.source, src.idType, item.typ)
+	}
+	return nil
+}
+
 func (c *core) lookup(key string) (*field, error) {
 	f, ok := c.byKey[key]
 	if !ok {
@@ -296,6 +340,9 @@ func (c *core) set(key string, raw json.RawMessage) error {
 	v, err := f.parse(raw)
 	if err != nil {
 		return &valueError{key: key, reason: err.Error()}
+	}
+	if err := c.verify(f, v); err != nil {
+		return err
 	}
 	return c.commit(func(cfg reflect.Value) { f.write(cfg.Elem().FieldByIndex(f.index), v) })
 }

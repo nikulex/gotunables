@@ -75,9 +75,9 @@ type BaseTargeting struct {
 
 // MyTargeting adds what only this program knows.
 type MyTargeting struct {
-	BaseTargeting
-	Provider tunables.Rule[string] `json:"provider" tune:"name:Account provider; enum:google,telegram,email"`
-	UserID   tunables.Rule[int]    `json:"users" tune:"name:People; source:people; custom:true"`
+	Provider      tunables.Rule[string] `json:"provider" tune:"name:Account provider; enum:google,telegram,email"`
+	UserID        tunables.Rule[int]    `json:"users" tune:"name:People; source:people; custom:true"`
+	BaseTargeting `tune:"section:Request"`
 }
 
 type BaseInfo struct {

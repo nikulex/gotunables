@@ -234,7 +234,7 @@ func (c *core) groupSetDTO(gs *groupSet, s *snapshot) groupSetDTO {
 		d.Fields = append(d.Fields, c.dtoOf(f, f.def))
 	}
 	for _, g := range gs.groups {
-		d.Groups = append(d.Groups, groupDTO{Key: g.key, Name: g.name, Desc: g.desc, Rule: g.rule, Collapsed: g.collapsed})
+		d.Groups = append(d.Groups, groupDTO{Key: g.key, Name: g.name, Desc: g.desc, Rule: g.rule, Collapsed: g.collapsed, Section: g.section})
 	}
 	sl := s.cfg.Elem().FieldByIndex(gs.index)
 	for i := 0; i < sl.Len(); i++ {

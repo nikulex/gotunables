@@ -62,9 +62,10 @@ type field struct {
 // group is a nested struct that has a display name or description.
 type group struct {
 	key, name, desc string
-	rule            bool // a Rule: its two sets (Only, Except) are drawn side by side in one card
-	collapsed       bool // the page shows it folded until someone opens it (tune:"collapsed:true")
-	feature         bool // a Feature: its rules are added from a list, and hidden while it is off
+	rule            bool   // a Rule: its two sets (Only, Except) are drawn side by side in one card
+	collapsed       bool   // the page shows it folded until someone opens it (tune:"collapsed:true")
+	feature         bool   // a Feature: its rules are added from a list, and hidden while it is off
+	section         string // the heading of the list the rule is under (tune:"section:..." on the embedded struct it comes from)
 }
 
 func (f *field) collection() bool { return f.elem != nil }
@@ -84,8 +85,8 @@ type tune struct {
 
 // parseTune parses `tune:"name:Max items; desc:Cart size; default:10; min:1; max:100"`.
 // Options are separated by ";", each is key:value. Known keys: key, name, desc, default, enum, min, max, ui, precision,
-// minlen, maxlen, source, custom, collapsed and flatten (groups only), and public (a field, or a group: all in it; "public"
-// alone is "public:true"). `tune:"-"` skips the field.
+// minlen, maxlen, source, custom, collapsed and flatten (groups only), public (a field, or a group: all in it; "public"
+// alone is "public:true") and section (an embedded struct: the heading its rules have in the list they are added from). `tune:"-"` skips the field.
 func parseTune(sf reflect.StructField) (tune, error) {
 	v, ok := sf.Tag.Lookup("tune")
 	if !ok {
@@ -109,9 +110,9 @@ func parseTune(sf reflect.StructField) (tune, error) {
 		}
 		k = strings.ToLower(strings.TrimSpace(k))
 		switch k {
-		case "key", "name", "desc", "default", "enum", "min", "max", "ui", "precision", "minlen", "maxlen", "source", "custom", "collapsed", "flatten", "public":
+		case "key", "name", "desc", "default", "enum", "min", "max", "ui", "precision", "minlen", "maxlen", "source", "custom", "collapsed", "flatten", "public", "section":
 		default:
-			return tune{}, fmt.Errorf("unknown tune option %q (known: key, name, desc, default, enum, min, max, ui, precision, minlen, maxlen, source, custom, collapsed, flatten, public)", k)
+			return tune{}, fmt.Errorf("unknown tune option %q (known: key, name, desc, default, enum, min, max, ui, precision, minlen, maxlen, source, custom, collapsed, flatten, public, section)", k)
 		}
 		t.opts[k] = strings.TrimSpace(val)
 	}
@@ -148,7 +149,7 @@ type walker struct {
 // declaration order. Defaults are the values already in v; a `default` option overrides (and is written into v).
 func walkAll(t reflect.Type, v reflect.Value) (*walker, error) {
 	w := &walker{seen: map[string]bool{}}
-	if err := w.walk(t, v, "", nil, 0, nil, false); err != nil {
+	if err := w.walk(t, v, "", nil, 0, nil, false, ""); err != nil {
 		return nil, err
 	}
 	return w, nil
@@ -158,7 +159,7 @@ func walkAll(t reflect.Type, v reflect.Value) (*walker, error) {
 // the same for both.
 var inheritedOptions = []string{"enum", "min", "max", "precision", "minlen", "maxlen", "source", "custom"}
 
-func (w *walker) walk(t reflect.Type, v reflect.Value, prefix string, index []int, depth int, inherit map[string]string, public bool) error {
+func (w *walker) walk(t reflect.Type, v reflect.Value, prefix string, index []int, depth int, inherit map[string]string, public bool, section string) error {
 	for i := 0; i < t.NumField(); i++ {
 		sf := t.Field(i)
 		embeddedStruct := sf.Anonymous && sf.Type.Kind() == reflect.Struct
@@ -199,6 +200,13 @@ func (w *walker) walk(t reflect.Type, v reflect.Value, prefix string, index []in
 			}
 		}
 		key := join(prefix, name) // an unnamed embedded struct is flattened: key == prefix
+		sec := section            // the rules of an embedded struct that has a section are listed under its heading
+		if t, ok := tag.opts["section"]; ok {
+			if sf.Type.Kind() != reflect.Struct {
+				return fmt.Errorf("tunables: field %s: section is only for a struct", where)
+			}
+			sec = t
+		}
 		idx := append(slices.Clone(index), i)
 		fv := v.Field(i)
 
@@ -244,7 +252,7 @@ func (w *walker) walk(t reflect.Type, v reflect.Value, prefix string, index []in
 						return fmt.Errorf("tunables: field %s: collapsed must be true or false, got %q", key, c)
 					}
 				}
-				w.groups = append(w.groups, &group{key: key, name: gname, desc: tag.opts["desc"], rule: kind == kindRule, collapsed: collapsed, feature: kind == kindFeature})
+				w.groups = append(w.groups, &group{key: key, name: gname, desc: tag.opts["desc"], rule: kind == kindRule, collapsed: collapsed, feature: kind == kindFeature, section: section})
 				if kind == kindFeature {
 					w.features = append(w.features, &featureRef{key: key, index: idx, public: pub})
 				}
@@ -262,7 +270,7 @@ func (w *walker) walk(t reflect.Type, v reflect.Value, prefix string, index []in
 			if kindOf(sf.Type) == kindFeature { // a feature is given as the answer for the request, not as its fields
 				inside = false
 			}
-			if err := w.walk(sf.Type, fv, key, idx, inner, next, inside); err != nil {
+			if err := w.walk(sf.Type, fv, key, idx, inner, next, inside, sec); err != nil {
 				return err
 			}
 			continue

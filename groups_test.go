@@ -308,3 +308,35 @@ func TestTheLettersOfTheGroups(t *testing.T) {
 		}
 	}
 }
+
+type ownRules struct {
+	People        Rule[uint] `json:"people" tune:"name:People; source:users"`
+	siteTargeting `tune:"section:Request"`
+}
+
+type sectionConfig struct {
+	Beta Feature[ownRules] `json:"beta"`
+}
+
+func TestTheRulesOfAnEmbeddedStructAreUnderItsSection(t *testing.T) {
+	tn, err := New(sectionConfig{}, WithName("t"), usersFiveSource())
+	if err != nil {
+		t.Fatal(err)
+	}
+	set := tn.c.groupSetDTO(tn.c.groupSets[0], tn.c.state.Load())
+	sections := map[string]string{}
+	for _, g := range set.Groups {
+		if g.Rule {
+			sections[g.Key] = g.Section
+		}
+	}
+	if sections["people"] != "" || sections["country"] != "Request" || sections["provider"] != "Request" {
+		t.Errorf("the rules of the program have none, the embedded ones are under Request: %v", sections)
+	}
+	type wrong struct {
+		A string `json:"a" tune:"section:Nope"`
+	}
+	if _, err := New(wrong{}, WithName("t")); err == nil || !strings.Contains(err.Error(), "section is only for a struct") {
+		t.Errorf("%v", err)
+	}
+}

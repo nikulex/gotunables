@@ -154,7 +154,7 @@ func (c *core) schemaPayload() map[string]any {
 	}
 	groups := make([]groupDTO, 0, len(c.groups))
 	for _, g := range c.groups {
-		groups = append(groups, groupDTO{Key: g.key, Name: g.name, Desc: g.desc, Rule: g.rule, Collapsed: g.collapsed, Feature: g.feature})
+		groups = append(groups, groupDTO{Key: g.key, Name: g.name, Desc: g.desc, Rule: g.rule, Collapsed: g.collapsed, Feature: g.feature, Section: g.section})
 	}
 	sets := make([]groupSetDTO, 0, len(c.groupSets))
 	for _, gs := range c.groupSets {
@@ -234,6 +234,8 @@ type groupDTO struct {
 	// Feature: a Feature. The page adds its rules from a list (only those that hold something are shown), and hides them while
 	// it is off.
 	Feature bool `json:"feature,omitempty"`
+	// Section: the heading of the list a rule is added from that it is under (rules with none come first)
+	Section string `json:"section,omitempty"`
 }
 
 func (c *core) dto(f *field, s *snapshot) fieldDTO {

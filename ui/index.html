@@ -71,6 +71,8 @@ button,input,textarea{font-family:inherit}
 .dialog-list{display:flex;flex-direction:column;gap:2px;min-height:0;overflow-y:auto;margin:0 -8px;padding:0 8px}
 .dialog-item{display:flex;flex-direction:column;gap:2px;border-radius:calc(var(--radius) - 4px);padding:8px 12px;cursor:pointer;user-select:none}
 .dialog-item.active,.dialog-item:hover{background:hsl(var(--accent));color:hsl(var(--accent-foreground))}
+.dialog-section{margin:8px 0 2px;padding:10px 12px 2px;border-top:1px solid hsl(var(--border));font-size:11px;line-height:16px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;color:hsl(var(--muted-foreground))}
+.dialog-section:first-child{margin-top:0;border-top:0;padding-top:2px}
 .dialog-item-name{font-size:14px;line-height:20px;font-weight:500}
 .dialog-item-desc{font-size:12px;line-height:16px;color:hsl(var(--muted-foreground))}
 .group-remove{margin-left:auto}
@@ -1286,7 +1288,7 @@ function renderGroupList(node, level) {
         searchPlaceholder: "Search the targetings…",
         empty: "All the targetings are added.",
         opener: pick,
-        items: rules.map((g) => ({ key: g.key, name: g.name || g.key, desc: g.desc || "" })),
+        items: bySection(rules.map((g) => ({ key: g.key, name: g.name || g.key, desc: g.desc || "", section: g.section || "" }))),
         onPick: (it) => {
           shownRules.add(gs.key + "." + draftGroup(gs) + "." + it.key);
           rebuild();
@@ -1578,10 +1580,10 @@ function featureAdd(node) {
       searchPlaceholder: "Search the targetings…",
       empty: "All the targetings are added.",
       opener: button,
-      items: list.map((c) => {
+      items: bySection(list.map((c) => {
         const m = groupMeta.get(c.key) || {};
-        return { key: c.key, name: m.name || c.key.split(".").pop(), desc: m.desc || "" };
-      }),
+        return { key: c.key, name: m.name || c.key.split(".").pop(), desc: m.desc || "", section: m.section || "" };
+      })),
       onPick: (it) => {
         shownRules.add(it.key);
         rebuild();
@@ -1614,6 +1616,13 @@ function rebuild() {
 }
 
 // A dialog with a list to pick from, like the ones of the shop: a search, the rows (a name and what it is), Esc or a click outside closes it.
+// the items that have no section first, then each section's, in the order the sections come
+function bySection(items) {
+  const order = [...new Set(items.map((it) => it.section || ""))];
+  if (order.includes("")) order.splice(order.indexOf(""), 1), order.unshift("");
+  return order.flatMap((sec) => items.filter((it) => (it.section || "") === sec));
+}
+
 function openDialog({ title, description, searchPlaceholder, empty, opener, items, onPick }) {
   const overlay = el("div", { className: "dialog-overlay" });
   const search = Input({ placeholder: searchPlaceholder || "Search…", autocomplete: "off" });
@@ -1630,6 +1639,7 @@ function openDialog({ title, description, searchPlaceholder, empty, opener, item
     list.replaceChildren();
     if (shown.length === 0) list.append(el("div", { className: "pick-note", textContent: items.length === 0 ? empty || "Nothing to add." : "Nothing found" }));
     shown.forEach((it, i) => {
+      if (it.section && (i === 0 || shown[i - 1].section !== it.section)) list.append(el("div", { className: "dialog-section", role: "presentation", textContent: it.section })); // a heading and a line over the section
       const row = el("div", { className: "dialog-item" + (i === active ? " active" : ""), role: "option" },
         el("span", { className: "dialog-item-name", textContent: it.name }),
         ...(it.desc ? [el("span", { className: "dialog-item-desc", textContent: it.desc })] : []));

@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"html"
 	"net/http"
 	"net/url"
@@ -97,7 +98,9 @@ func (c *core) page() []byte {
 	if c.opts.token != "" {
 		return ui.HTML
 	}
-	boot, err := json.Marshal(map[string]any{"meta": c.metaPayload(), "schema": c.schemaPayload()}) // escapes < > &
+	s := c.state.Load()
+	tag := fmt.Sprintf(`"%s-%d"`, c.nonce, s.version)
+	boot, err := json.Marshal(map[string]any{"meta": c.metaPayload(), "schema": c.schemaPayload(), "items": c.itemsPayload(s), "tag": tag}) // escapes < > &
 	if err != nil {
 		c.opts.log.Warn("tunables: preload the page", "error", err)
 		return ui.HTML
@@ -164,7 +167,16 @@ func (c *core) handleMeta(w http.ResponseWriter, _ *http.Request) {
 	c.writeJSON(w, http.StatusOK, c.metaPayload())
 }
 
-func (c *core) handleSchema(w http.ResponseWriter, _ *http.Request) {
+// handleSchema answers 304 to a page that has the latest settings (If-None-Match: the tag it was given), which is what it
+// asks every few seconds: nothing is built and nothing is sent when nothing changed.
+func (c *core) handleSchema(w http.ResponseWriter, r *http.Request) {
+	tag := fmt.Sprintf(`"%s-%d"`, c.nonce, c.state.Load().version)
+	w.Header().Set("ETag", tag)
+	if r.Header.Get("If-None-Match") == tag {
+		w.Header().Set("Cache-Control", "no-store")
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
 	c.writeJSON(w, http.StatusOK, c.schemaPayload())
 }
 

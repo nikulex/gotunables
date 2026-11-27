@@ -205,6 +205,8 @@ type core struct {
 
 	mu    sync.Mutex // serializes writes and reloads
 	state atomic.Pointer[snapshot]
+	seq   atomic.Uint64 // the number of the snapshots published: what the page asks whether it has the latest by
+	nonce string        // tells this run of the program from another, so that the numbers of two runs are not mixed up
 
 	stop      func() // ends the Store's Watch, if any
 	closeOnce sync.Once
@@ -212,7 +214,8 @@ type core struct {
 
 // snapshot is immutable once published.
 type snapshot struct {
-	cfg reflect.Value // *T
+	cfg     reflect.Value // *T
+	version uint64
 }
 
 func newCore(typ reflect.Type, initial reflect.Value, o options) (*core, error) {
@@ -227,7 +230,7 @@ func newCore(typ reflect.Type, initial reflect.Value, o options) (*core, error) 
 		return nil, err
 	}
 	fields, groups := w.fields, w.groups
-	c := &core{typ: typ, fields: fields, groups: groups, byKey: make(map[string]*field, len(fields)), opts: o, sources: make(map[string]*source, len(o.sources)),
+	c := &core{nonce: newGroupID(), typ: typ, fields: fields, groups: groups, byKey: make(map[string]*field, len(fields)), opts: o, sources: make(map[string]*source, len(o.sources)),
 		features: w.features, groupSets: w.groupSets, groupByKey: make(map[string]*groupSet, len(w.groupSets))}
 	for _, gs := range w.groupSets {
 		c.groupByKey[gs.key] = gs
@@ -305,7 +308,7 @@ func (c *core) start(defaults reflect.Value) error {
 // publish makes a config the current one.
 func (c *core) publish(cfg reflect.Value) {
 	c.bind(cfg)
-	c.state.Store(&snapshot{cfg: cfg})
+	c.state.Store(&snapshot{cfg: cfg, version: c.seq.Add(1)})
 }
 
 // loadStored builds a config from the defaults plus whatever the Store holds. Invalid saved values fall back

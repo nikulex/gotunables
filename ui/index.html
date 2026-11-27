@@ -1139,8 +1139,9 @@ function niceStep(span) {
 // ---- page ----
 
 // Relative URLs, so the page works under any mount prefix.
-async function api(method, path, body, signal) {
-  const headers = {};
+// extra.headers are sent too, extra.response is told the response (for its headers); a 304 is answered with null.
+async function api(method, path, body, signal, extra = {}) {
+  const headers = { ...extra.headers };
   if (token) headers.Authorization = "Bearer " + token;
   if (body !== undefined) headers["Content-Type"] = "application/json";
   const res = await fetch(path, {
@@ -1148,6 +1149,8 @@ async function api(method, path, body, signal) {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (res.status === 401) { showAuth(); throw new AuthError(); }
+  extra.response?.(res);
+  if (res.status === 304) return null;
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || res.statusText);
   return data;
@@ -1479,11 +1482,27 @@ function removeGroup(gs, id) {
 const fieldOf = (node, name) => node.rows.find((x) => x.name === name);
 const valueOf = (r) => (pending.has(r.f.key) ? pending.get(r.f.key) : r.f.value);
 
-// the button of a feature that has one group: that group has no heading, so it is by the switch of the feature
+// the button of a feature that has no group or one: the share of the traffic is the feature's, so it is by its switch. With no
+// group it makes the first one (empty: it is not kept unless it has a share) and opens it.
 function featureTraffic(feature) {
   const list = [...feature.groups.values()].find((c) => (groupMeta.get(c.key) || {}).groupList);
-  const groups = list ? [...list.groups].filter(([name]) => name !== "#list") : [];
-  return groups.length === 1 ? trafficButton(groups[0][1]) : null;
+  if (!list) return null;
+  const groups = [...list.groups].filter(([name]) => name !== "#list");
+  if (groups.length > 1) return null;
+  if (groups.length === 1) {
+    const button = trafficButton(groups[0][1]);
+    button.dataset.setKey = list.key;
+    return button;
+  }
+  const button = el("button", { type: "button", className: "group-toggle group-share-button", ariaLabel: "Traffic", title: "Traffic" }, icon("sliders"));
+  button.dataset.setKey = list.key;
+  button.onclick = () => {
+    draftGroup(groupSetsOf().find((g) => g.key === list.key));
+    rebuild();
+    updateBar();
+    document.querySelector(`.group-share-button[data-set-key="${list.key}"]`)?.click();
+  };
+  return button;
 }
 
 function trafficButton(node) {
@@ -1972,10 +1991,16 @@ function updateNavbar() {
   bar.classList.toggle("stuck", stuck);
 }
 
+// What the page has of the settings is told by the tag the server gave it: the refresh asks for them with it, and the server
+// answers that nothing changed with a few bytes. The name and the description do not change, they are asked for once.
+let schemaTag = null;
 async function load() {
   try {
-    const [meta, schema] = await Promise.all([api("GET", "meta"), api("GET", "schema")]);
-    show(meta, schema);
+    const [meta, schema] = await Promise.all([
+      lastData ? lastData.meta : api("GET", "meta"),
+      api("GET", "schema", undefined, undefined, { headers: schemaTag && lastData ? { "If-None-Match": schemaTag } : {}, response: (res) => { schemaTag = res.headers.get("ETag") || schemaTag; } }),
+    ]);
+    if (schema) show(meta, schema);
   } catch (e) {
     if (e instanceof AuthError) return;
     $("banner").textContent = "Could not load: " + e.message;
@@ -2000,7 +2025,11 @@ addEventListener("beforeunload", (e) => { if (pending.size) e.preventDefault(); 
 // The server puts the current values into the page (not when a token is set): render them right away, with no
 // request and no empty first paint, then keep the page live by polling.
 const boot = JSON.parse($("boot").textContent);
-if (boot) show(boot.meta, boot.schema); else load();
+if (boot) {
+  for (const [source, list] of Object.entries(boot.items || {})) for (const e of list) entries.set(entryKey(source, e.id), e); // the names of the chosen: no request for each
+  schemaTag = boot.tag; // the ETag of the schema as the server tags it
+  show(boot.meta, boot.schema);
+} else load();
 setInterval(load, 5000);
 </script>
 </body>

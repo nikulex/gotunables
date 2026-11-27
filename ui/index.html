@@ -1,0 +1,902 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>tunables</title>
+<style>
+/* shadcn/ui (new-york, zinc) in plain CSS: the tokens and the component classes are the ones of the
+   Tailwind build, written out. No build step. */
+:root{color-scheme:light dark;--background:0 0% 100%;--foreground:240 10% 3.9%;--popover:0 0% 100%;--popover-foreground:240 10% 3.9%;--primary:240 5.9% 10%;--primary-foreground:0 0% 98%;--secondary:240 4.8% 95.9%;--secondary-foreground:240 5.9% 10%;--muted:240 4.8% 95.9%;--muted-foreground:240 3.8% 46.1%;--accent:240 4.8% 95.9%;--accent-foreground:240 5.9% 10%;--destructive:0 84.2% 60.2%;--border:240 5.9% 90%;--input:240 5.9% 90%;--ring:240 10% 3.9%;--orange:8 100% 57%;--radius:.5rem;--grey:240 5.9% 90%/.7;--grey-hover:240 4.9% 83.9%/.7;--shadow:0 1px 3px 0 rgb(0 0 0/.1),0 1px 2px -1px rgb(0 0 0/.1);--shadow-sm:0 1px 2px 0 rgb(0 0 0/.05);--shadow-md:0 4px 6px -1px rgb(0 0 0/.1),0 2px 4px -2px rgb(0 0 0/.1);--shadow-lg:0 10px 15px -3px rgb(0 0 0/.1),0 4px 6px -4px rgb(0 0 0/.1)}
+@media (prefers-color-scheme:dark){:root{--background:240 10% 3.9%;--foreground:0 0% 98%;--popover:240 10% 3.9%;--popover-foreground:0 0% 98%;--primary:0 0% 98%;--primary-foreground:240 5.9% 10%;--secondary:240 3.7% 15.9%;--secondary-foreground:0 0% 98%;--muted:240 3.7% 15.9%;--muted-foreground:240 5% 64.9%;--accent:240 3.7% 15.9%;--accent-foreground:0 0% 98%;--destructive:0 62.8% 50.6%;--border:240 3.7% 15.9%;--input:240 3.7% 15.9%;--ring:240 4.9% 83.9%;--grey:240 3.7% 15.9%/.7;--grey-hover:240 5.2% 33.9%/.7}}
+html{scrollbar-gutter:stable} /* room for the scrollbar is always kept: the page does not shift when it appears */
+*{box-sizing:border-box;border-color:hsl(var(--border))}
+body{position:relative;margin:0;background:hsl(var(--background));color:hsl(var(--foreground));font:16px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+button,input,textarea{font-family:inherit}
+
+/* ---- Button: variants default | outline | secondary, sizes default | icon ---- */
+.btn{display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;border:0;border-radius:calc(var(--radius) - 2px);font-size:14px;line-height:20px;font-weight:500;transition:all .3s;user-select:none;cursor:pointer}
+.btn:focus-visible{outline:none;box-shadow:0 0 0 1px hsl(var(--ring))}
+.btn:disabled{pointer-events:none;opacity:.5}
+.btn-default{background:hsl(var(--primary));color:hsl(var(--primary-foreground));box-shadow:var(--shadow-sm)}
+.btn-default:hover{background:hsl(var(--primary)/.9)}
+.btn-outline{border:1px solid hsl(var(--input));background:hsl(var(--background));color:inherit;box-shadow:var(--shadow-sm)}
+.btn-outline:hover{background:hsl(var(--accent));color:hsl(var(--accent-foreground))}
+.btn-secondary{background:hsl(var(--secondary));color:hsl(var(--secondary-foreground));box-shadow:var(--shadow-sm)}
+.btn-secondary:hover{background:hsl(var(--secondary)/.8)}
+.btn-link{gap:8px;color:hsl(var(--primary));text-underline-offset:4px;text-decoration:none}
+.btn-link:hover{text-decoration:underline}
+.size-default{height:36px;padding:8px 16px}
+.size-sm{height:32px;padding:0 12px;font-size:12px}
+.size-icon{height:36px;width:36px}
+
+/* ---- Input, Textarea ---- */
+.input,.textarea{display:flex;width:100%;min-width:0;border:1px solid hsl(var(--input));border-radius:calc(var(--radius) - 2px);background:hsl(var(--input)/.3);padding:4px 12px;font-size:14px;line-height:20px;color:inherit;box-shadow:var(--shadow-sm);transition:color .15s,box-shadow .15s}
+.input{height:36px}
+.textarea{min-height:60px;padding:8px 12px;resize:vertical}
+.input::placeholder,.textarea::placeholder{color:hsl(var(--muted-foreground))}
+.input:focus-visible,.textarea:focus-visible{outline:none;box-shadow:0 0 0 1px hsl(var(--ring))}
+
+/* ---- Select: trigger, content, item ---- */
+.select-trigger{display:flex;height:36px;width:100%;min-width:0;align-items:center;justify-content:space-between;gap:8px;white-space:nowrap;border:1px solid hsl(var(--input));border-radius:calc(var(--radius) - 2px);background:hsl(var(--input)/.3);padding:8px 12px;font-size:14px;line-height:20px;color:inherit;text-align:left;box-shadow:var(--shadow-sm);cursor:pointer}
+.select-trigger:focus{outline:none;box-shadow:0 0 0 1px hsl(var(--ring))}
+.select-trigger>span{overflow:hidden;text-overflow:ellipsis}
+.select-trigger>svg{flex:none;width:16px;height:16px;opacity:.5}
+.select-content{position:fixed;z-index:50;min-width:8rem;overflow-x:hidden;overflow-y:auto;border:1px solid hsl(var(--border));border-radius:calc(var(--radius) - 2px);background:hsl(var(--popover));color:hsl(var(--popover-foreground));box-shadow:var(--shadow-md);animation:select-in .15s ease-out}
+.select-content[data-side=top]{transform-origin:bottom}
+.select-content[data-side=bottom]{transform-origin:top}
+@keyframes select-in{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+.select-viewport{padding:4px}
+.select-item{position:relative;display:flex;width:100%;align-items:center;border-radius:calc(var(--radius) - 4px);padding:6px 32px 6px 8px;font-size:14px;line-height:20px;cursor:pointer;user-select:none;outline:none}
+.select-item:hover,.select-item:focus{background:hsl(var(--accent));color:hsl(var(--accent-foreground))}
+.select-indicator{position:absolute;right:8px;display:flex;width:14px;height:14px;align-items:center;justify-content:center}
+.select-indicator svg{width:16px;height:16px}
+
+/* ---- Switch, Checkbox, Radio group ---- */
+.switch{display:inline-flex;flex:none;width:48px;height:28px;align-items:center;border:2px solid transparent;border-radius:9999px;padding:0;background:hsl(var(--input));cursor:pointer;transition:background-color .15s}
+.switch:focus-visible{outline:none;box-shadow:0 0 0 2px hsl(var(--background)),0 0 0 4px hsl(var(--ring))}
+.switch[data-state=checked]{background:hsl(var(--primary))}
+.switch-thumb{pointer-events:none;display:block;width:24px;height:24px;border-radius:9999px;background:hsl(var(--background));box-shadow:0 1px 3px rgb(0 0 0/.25);transition:transform .15s;transform:translateX(0)}
+.switch[data-state=checked] .switch-thumb{transform:translateX(20px)}
+.checkbox{display:inline-flex;flex:none;width:16px;height:16px;align-items:center;justify-content:center;border:1px solid hsl(var(--primary));border-radius:calc(var(--radius) - 4px);padding:0;background:transparent;color:hsl(var(--primary-foreground));box-shadow:var(--shadow-sm);cursor:pointer}
+.checkbox:focus-visible{outline:none;box-shadow:0 0 0 1px hsl(var(--ring))}
+.checkbox[data-state=checked]{background:hsl(var(--primary))}
+.checkbox svg{width:14px;height:14px}
+
+/* ---- Button group (SelectButtons of the shop): joined buttons, the chosen one is "default", the rest "secondary" ---- */
+.select-buttons{display:flex;height:36px;min-width:14rem;max-width:100%;justify-content:space-between;gap:0;overflow:hidden;border-radius:var(--radius)}
+.select-buttons .btn{flex:1 1 auto;height:100%;border-radius:0;font-size:14px;transition-duration:.1s}
+
+/* ---- Slider ---- */
+.slider{position:relative;display:flex;width:100%;height:32px;align-items:center;touch-action:none;user-select:none;cursor:pointer}
+.slider-track{position:relative;display:block;height:12px;width:100%;flex-grow:1;overflow:hidden;border-radius:9999px;background:hsl(var(--primary)/.2)}
+.slider-range{position:absolute;display:block;height:100%;background:hsl(var(--primary))}
+.slider-thumb{position:absolute;display:block;width:16px;height:32px;border:1px solid hsl(var(--primary)/.5);border-radius:calc(var(--radius) - 4px);background:hsl(var(--background));box-shadow:0 1px 2px rgb(0 0 0/.15);transform:translateX(-50%);transition:color .15s}
+.slider-thumb:focus-visible{outline:none;box-shadow:0 0 0 1px hsl(var(--ring))}
+.slider-line{display:flex;align-items:center;gap:10px}
+.slider-line .slider{flex:1 1 0;width:auto;min-width:0}
+.slider-end{flex:none;color:hsl(var(--muted-foreground));font-size:12px;line-height:16px;font-variant-numeric:tabular-nums}
+/* shadcn InputGroup: one border and one focus ring around the number and its unit */
+.duration{display:flex;align-items:center;overflow:hidden;height:36px;border:1px solid hsl(var(--input));border-radius:calc(var(--radius) - 2px);background:hsl(var(--background));box-shadow:var(--shadow-sm);transition:color .15s,box-shadow .15s}
+.duration:has(.duration-input:focus-visible){box-shadow:0 0 0 1px hsl(var(--ring))}
+.duration .duration-input{flex:none;height:100%;border:0;border-radius:0;background:transparent;box-shadow:none}
+.duration .duration-input:focus-visible{box-shadow:none}
+.duration .unit-select{flex:none;width:auto;height:100%;margin:0;gap:4px;border:0;border-left:1px solid hsl(var(--input));border-radius:0;background:hsl(var(--muted));box-shadow:none;padding:0 10px 0 12px;font-weight:500;color:hsl(var(--foreground))}
+.duration .unit-select:hover,.duration .unit-select:focus{background:hsl(var(--accent));box-shadow:none}
+.num-field{flex:none;text-align:right;font-variant-numeric:tabular-nums}
+.slider-input{flex:none;width:auto;padding:0 10px;text-align:right;font-variant-numeric:tabular-nums}
+
+/* ---- Counter: the quantity control of the shop (plus | input | minus), joined ---- */
+.counter{display:flex;flex:none;justify-content:space-between}
+.btn.counter-btn{background:hsl(var(--grey));color:hsl(var(--secondary-foreground))}
+.btn.counter-btn:hover{background:hsl(var(--grey-hover))}
+.counter-plus{border-radius:calc(var(--radius) - 2px) 0 0 calc(var(--radius) - 2px)}
+.counter-minus{border-radius:0 calc(var(--radius) - 2px) calc(var(--radius) - 2px) 0}
+.counter-input{flex:none;min-width:2.4rem;padding:0;text-align:center;border-radius:0} /* the width is set from the longest value */
+
+/* ---- Breadcrumb ---- */
+.breadcrumb-list{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0;padding:0;list-style:none;overflow-wrap:break-word;font-size:14px;line-height:20px;color:hsl(var(--muted-foreground))}
+.breadcrumb-item{display:inline-flex;align-items:center;gap:6px}
+.breadcrumb-link{color:inherit;text-decoration:none;transition:color .15s}
+.breadcrumb-link:hover{color:hsl(var(--foreground))}
+.breadcrumb-page{font-weight:400;color:hsl(var(--foreground))}
+.breadcrumb-separator{display:inline-flex}
+.breadcrumb-separator svg{width:14px;height:14px}
+@media (min-width:640px){.breadcrumb-list{gap:10px}.breadcrumb-item{gap:10px}}
+nav[hidden],a.btn[hidden]{display:none}
+#crumbs{margin:0 0 20px}
+
+.actions[hidden]{display:none}
+
+/* ---- Card ---- */
+.card{overflow:hidden;border:1px solid hsl(var(--border));border-radius:calc(var(--radius) + 4px);background:hsl(var(--background));box-shadow:var(--shadow-sm)}
+
+/* ---- Page: a card per group; the hierarchy is the size of the heading and the faint icons before it ---- */
+/* the navbar is see-through over the hero; once the hero has gone under it, it gets its blur, its line and the name */
+.bar{position:sticky;top:0;z-index:10;border-bottom:1px solid transparent;transition:border-color .3s,background-color .3s,backdrop-filter .3s,-webkit-backdrop-filter .3s}
+.bar.stuck{border-bottom-color:hsl(var(--border));background:hsl(var(--background)/.92);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.bar-title{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:20px;line-height:28px;font-weight:700;letter-spacing:-.025em;opacity:0;transform:translateY(6px);transition:opacity .3s,transform .3s}
+.bar.stuck .bar-title{opacity:1;transform:none}
+.hero{padding:16px 0 60px}
+.hero[hidden]{display:none}
+.hero-title{margin:0;font-size:44px;line-height:1.05;font-weight:800;letter-spacing:-.035em;overflow-wrap:anywhere}
+.hero-desc{margin:14px 0 0;max-width:38rem;font-size:20px;line-height:1.5;font-weight:450;white-space:pre-line;color:hsl(var(--foreground)/.85)}
+.hero-desc:empty{display:none}
+.action{width:6.5rem} /* the same width for both buttons */
+.action svg{display:none;width:16px;height:16px}
+.bar-in{display:flex;min-height:64px;max-width:768px;align-items:center;justify-content:space-between;gap:12px;margin:0 auto;padding:12px 24px}
+.title{display:flex;min-width:0;align-items:center;gap:12px}
+.actions{display:flex;flex:none;gap:8px}
+main{max-width:768px;margin:0 auto;padding:24px 24px calc(64px + env(safe-area-inset-bottom))}
+
+/* levels: 1 is the biggest, every next level is smaller */
+.group.level-1{margin-top:56px}
+.group.level-2{margin-top:20px} /* a child sits close to the parent it belongs to */
+.group.level-3{margin-top:16px}
+#root>:first-child,.page>:first-child{margin-top:0}
+.group-head{margin-bottom:8px}
+.heading{margin:0;font-weight:700;letter-spacing:-.025em}
+.level-1>.group-head>.heading{font-size:24px;line-height:32px}
+.level-2>.group-head>.heading{font-size:20px;line-height:28px}
+.level-3>.group-head>.heading{font-size:16px;line-height:24px}
+/* the depth is told by a faint "child of" icon (lucide corner-down-right) before the heading: one for the 2nd level, two for the 3rd */
+.heading{display:flex;align-items:center}
+.depth{display:inline-flex;align-items:center;flex:none;gap:6px;margin-right:12px;color:hsl(var(--muted-foreground));opacity:.55}
+.depth .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+.heading-link{display:inline-flex;align-items:center;gap:6px;color:inherit;text-decoration:none}
+.heading-link svg{width:.7em;height:.7em;flex:none;opacity:.35;transition:opacity .15s,transform .15s}
+.heading-link:hover svg,.heading-link:focus-visible svg{opacity:1;transform:translateX(2px)}
+.heading-link:focus-visible{outline:none;border-radius:calc(var(--radius) - 4px);box-shadow:0 0 0 1px hsl(var(--ring))}
+.group-head p{margin:2px 0 0;color:hsl(var(--muted-foreground));font-size:14px;line-height:20px}
+
+.field{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:68px;padding:14px 20px;box-shadow:inset 0 1px 0 hsl(var(--border))}
+.card>.field:first-child{box-shadow:none}
+.rows>.field{padding:12px 0;box-shadow:none} /* the fields of the root have no card around them */
+
+.field-block{flex-direction:column;align-items:stretch;gap:8px;min-height:0}
+.field-text{display:grid;min-width:0;gap:4px}
+.label{font-size:16px;line-height:1;font-weight:500;overflow-wrap:anywhere} /* the same size on every level: only headings change */
+.field.dirty .label::after{content:"*";margin-left:4px;color:hsl(var(--orange));font-weight:700}
+.description{margin:0;color:hsl(var(--muted-foreground));font-size:14px;line-height:1.25}
+.message{margin:0;color:hsl(var(--destructive));font-size:14px;line-height:1.25;font-weight:500}
+.ctl{display:flex;flex:none;align-items:center;justify-content:flex-end;gap:12px}
+.field-block .ctl{flex:1;justify-content:stretch}
+.w-field{width:14rem}
+.field-block .w-field{width:100%}
+.w-slider{width:16rem}
+.banner{margin:0 0 16px;color:hsl(var(--destructive));font-size:14px}
+.auth{display:flex;gap:8px;max-width:24rem}
+
+/* Phones: same layout, the control stays opposite the name */
+@media (max-width:640px){
+  .bar-in{min-height:56px;padding:10px 16px}
+  .hero{padding:10px 16px 36px}
+  .hero-title{font-size:34px}
+  .hero-desc{margin-top:10px;font-size:17px}
+  .bar-title{font-size:18px}
+  /* icons instead of words on the buttons of the navbar */
+  .action{width:36px;padding:0}
+  .action svg{display:block}
+  .action .btn-text{display:none}
+  main{padding:16px 0 calc(48px + env(safe-area-inset-bottom))}
+  .banner,#crumbs{padding:0 16px}
+  .group.level-1{margin-top:44px}
+  .group.level-2{margin-top:18px}
+  .group.level-3{margin-top:14px}
+  .group-head{padding:0 16px}
+  .card{border-radius:0;border-left:0;border-right:0;box-shadow:none}
+  .level-1>.group-head>.heading{font-size:20px;line-height:28px}
+  .level-2>.group-head>.heading{font-size:18px;line-height:26px}
+  .level-3>.group-head>.heading{font-size:16px;line-height:24px}
+  /* the name and its control share a line; a control that does not fit goes under the name */
+  .field{flex-wrap:wrap;gap:8px 12px;padding:14px 16px}
+  .rows>.field{padding:12px 16px}
+  .field-text{flex:1 1 6rem}
+  .ctl{flex:0 1 auto;min-width:0;gap:8px}
+  .w-field{width:100%;min-width:0}
+  .select-buttons{min-width:0;width:auto;flex:1 1 auto}
+  .select-buttons .btn{min-width:0;padding:0 6px} /* many options still fit one line of the phone */
+  .ctl:has(.w-field){flex:1.5 1 11rem}
+  .ctl:has(.select-buttons){flex:1.5 1 auto} /* as wide as its buttons: many of them do not fit beside the name, so they wrap */
+  /* a slider always gets a line of its own: the track, its ends and the number need the room */
+  .field:has(.w-slider){flex-direction:column;align-items:stretch;gap:10px}
+  .field:has(.w-slider) .field-text,.field:has(.w-slider) .ctl{flex:none}
+  .field:has(.w-slider) .ctl{width:100%}
+  .w-slider{width:auto;flex:1 1 0;min-width:0}
+  .field-block .field-text{flex:none}
+  .field-block .ctl{flex:1}
+}
+</style>
+</head>
+<body>
+<header class="bar" id="bar">
+  <div class="bar-in">
+    <div class="title"><span class="bar-title" id="name">tunables</span></div>
+    <div class="actions" id="actions" hidden></div>
+  </div>
+</header>
+<main>
+  <section class="hero" id="hero">
+    <h1 class="hero-title" id="heroName">tunables</h1>
+    <p class="hero-desc" id="desc"></p>
+  </section>
+  <nav id="crumbs" aria-label="breadcrumb" hidden></nav>
+  <p class="banner" id="banner" hidden></p>
+  <div id="root"></div>
+</main>
+<script type="application/json" id="boot">null</script>
+<script>
+"use strict";
+class AuthError extends Error {}
+
+const $ = (id) => document.getElementById(id);
+let token = sessionStorage.getItem("tunables-token") || "";
+let signature = null;
+let authShown = false;
+let saving = false;
+let groupMeta = new Map();
+const rows = new Map();    // key -> {el, apply(field), discard(), fail(message)}
+const pending = new Map(); // key -> edited, not yet saved value
+
+function el(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  Object.assign(e, props || {});
+  e.append(...kids);
+  return e;
+}
+
+// Icons: Radix (select, checkbox) and Feather (counter), as the shop uses them. Static markup only.
+const ICON = {
+  chevronDown: '<svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3.13523 6.15803C3.3241 5.95657 3.64052 5.94637 3.84197 6.13523L7.5 9.56464L11.158 6.13523C11.3595 5.94637 11.6759 5.95657 11.8648 6.15803C12.0536 6.35949 12.0434 6.67591 11.842 6.86477L7.84197 10.6148C7.64964 10.7951 7.35036 10.7951 7.15803 10.6148L3.15803 6.86477C2.95657 6.67591 2.94637 6.35949 3.13523 6.15803Z" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"></path></svg>',
+  check: '<svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M11.4669 3.72684C11.7558 3.91574 11.8369 4.30308 11.648 4.59198L7.39799 11.092C7.29783 11.2452 7.13556 11.3467 6.95402 11.3699C6.77247 11.3931 6.58989 11.3355 6.45446 11.2124L3.70446 8.71241C3.44905 8.48022 3.43023 8.08494 3.66242 7.82953C3.89461 7.57412 4.28989 7.55529 4.5453 7.78749L6.75292 9.79441L10.6018 3.90792C10.7907 3.61902 11.178 3.53795 11.4669 3.72684Z" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"></path></svg>',
+  chevronRight: '<svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6.1584 3.13508C6.35985 2.94621 6.67627 2.95642 6.86514 3.15788L10.6151 7.15788C10.7954 7.3502 10.7954 7.64949 10.6151 7.84182L6.86514 11.8418C6.67627 12.0433 6.35985 12.0535 6.1584 11.8646C5.95694 11.6757 5.94673 11.3593 6.13559 11.1579L9.565 7.49985L6.13559 3.84182C5.94673 3.64036 5.95694 3.32394 6.1584 3.13508Z" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"></path></svg>',
+  arrowLeft: '<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>',
+  luCheck: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>',
+  luRotateCcw: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>',
+  plus: '<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>',
+  minus: '<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"></line></svg>',
+};
+const icon = (name) => { const t = document.createElement("template"); t.innerHTML = ICON[name]; return t.content.firstChild; };
+
+// ---- components (each returns {el, set(value)}) ----
+
+function Button({ variant = "default", size = "default", className = "", ...props }, ...kids) {
+  return el("button", { type: "button", ...props, className: `btn btn-${variant} size-${size} ${className}`.trim() }, ...kids);
+}
+
+function Input(props) {
+  return el("input", { type: "text", autocomplete: "off", ...props, className: ("input " + (props.className || "")).trim() });
+}
+
+function Textarea(onChange) {
+  const t = el("textarea", { className: "textarea", rows: 3 });
+  t.oninput = () => onChange(t.value);
+  return { el: t, set(v) { t.value = v; } };
+}
+
+function Switch(onChange) {
+  let checked = false;
+  const root = el("button", { type: "button", className: "switch", role: "switch" }, el("span", { className: "switch-thumb" }));
+  const set = (v) => { checked = v; root.setAttribute("aria-checked", String(v)); root.dataset.state = v ? "checked" : "unchecked"; };
+  root.onclick = () => { set(!checked); onChange(checked); };
+  set(false);
+  return { el: root, set };
+}
+
+function Checkbox(onChange) {
+  let checked = false;
+  const root = el("button", { type: "button", className: "checkbox", role: "checkbox" });
+  const set = (v) => {
+    checked = v;
+    root.setAttribute("aria-checked", String(v));
+    root.dataset.state = v ? "checked" : "unchecked";
+    root.replaceChildren(...(v ? [icon("check")] : []));
+  };
+  root.onclick = () => { set(!checked); onChange(checked); };
+  set(false);
+  return { el: root, set };
+}
+
+// Joined buttons, as the shop's SelectButtons: the chosen one is the "default" variant, the others "secondary".
+function ButtonGroup(options, onChange) {
+  const buttons = new Map();
+  const group = el("div", { className: "select-buttons", role: "radiogroup" });
+  const set = (v) => {
+    for (const [o, b] of buttons) {
+      const on = o === v;
+      b.className = `btn btn-${on ? "default" : "secondary"} size-sm`;
+      b.setAttribute("aria-checked", String(on));
+    }
+  };
+  for (const o of options) {
+    const b = el("button", { type: "button", role: "radio", textContent: o });
+    b.onclick = (e) => { e.preventDefault(); set(o); onChange(o); };
+    buttons.set(o, b);
+    group.append(b);
+  }
+  return { el: group, set };
+}
+
+function Select(options, onChange) {
+  let value = "";
+  let menu = null;
+  const label = el("span");
+  const trigger = el("button", { type: "button", className: "select-trigger", role: "combobox" }, label, icon("chevronDown"));
+  trigger.setAttribute("aria-haspopup", "listbox");
+  trigger.setAttribute("aria-expanded", "false");
+
+  const set = (v) => { value = v; label.textContent = v; };
+
+  function close(refocus) {
+    if (!menu) return;
+    menu.remove();
+    menu = null;
+    trigger.setAttribute("aria-expanded", "false");
+    document.removeEventListener("pointerdown", outside, true);
+    removeEventListener("resize", close);
+    removeEventListener("scroll", onScroll, true);
+    if (refocus === true) trigger.focus();
+  }
+  const outside = (e) => { if (menu && !menu.contains(e.target) && !trigger.contains(e.target)) close(false); };
+  const onScroll = (e) => { if (menu && !menu.contains(e.target)) close(false); };
+
+  function open() {
+    if (menu) return;
+    const items = options.map((o) => {
+      const item = el("div", { className: "select-item", role: "option", tabIndex: -1 }, el("span", { textContent: o }),
+        el("span", { className: "select-indicator" }));
+      item.dataset.value = o;
+      item.setAttribute("aria-selected", String(o === value));
+      if (o === value) item.querySelector(".select-indicator").append(icon("check"));
+      item.onclick = () => { set(o); close(true); onChange(o); };
+      return item;
+    });
+    menu = el("div", { className: "select-content", role: "listbox" }, el("div", { className: "select-viewport" }, ...items));
+    document.body.append(menu);
+    trigger.setAttribute("aria-expanded", "true");
+
+    // below the trigger, or above when there is no room
+    const r = trigger.getBoundingClientRect();
+    menu.style.minWidth = r.width + "px";
+    const room = innerHeight - r.bottom - 8;
+    const above = r.top - 8;
+    const h = Math.min(menu.scrollHeight, 384);
+    const up = h > room && above > room;
+    menu.dataset.side = up ? "top" : "bottom";
+    menu.style.maxHeight = Math.min(384, up ? above : room) + "px";
+    menu.style.left = Math.max(8, Math.min(r.left, innerWidth - menu.offsetWidth - 8)) + "px";
+    menu.style.top = (up ? r.top - Math.min(h, above) - 4 : r.bottom + 4) + "px";
+
+    document.addEventListener("pointerdown", outside, true);
+    addEventListener("resize", close);
+    addEventListener("scroll", onScroll, true);
+
+    (items.find((i) => i.dataset.value === value) || items[0]).focus();
+    menu.onkeydown = (e) => {
+      const i = items.indexOf(document.activeElement);
+      const go = (n) => { e.preventDefault(); items[(n + items.length) % items.length].focus(); };
+      if (e.key === "ArrowDown") go(i + 1);
+      else if (e.key === "ArrowUp") go(i - 1);
+      else if (e.key === "Home") go(0);
+      else if (e.key === "End") go(items.length - 1);
+      else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (i >= 0) items[i].click(); }
+      else if (e.key === "Escape") { e.preventDefault(); close(true); }
+      else if (e.key === "Tab") close(false);
+    };
+  }
+
+  trigger.onclick = () => (menu ? close(true) : open());
+  trigger.onkeydown = (e) => { if (["ArrowDown", "ArrowUp"].includes(e.key)) { e.preventDefault(); open(); } };
+  return { el: trigger, set };
+}
+
+function Slider({ min, max, step, onChange }) {
+  const W = 16; // the thumb is w-4
+  let value = min;
+  const range = el("span", { className: "slider-range" });
+  const thumb = el("span", { className: "slider-thumb", role: "slider", tabIndex: 0 });
+  const root = el("span", { className: "slider" }, el("span", { className: "slider-track" }, range), thumb);
+  thumb.setAttribute("aria-valuemin", min);
+  thumb.setAttribute("aria-valuemax", max);
+
+  const clamp = (v) => Math.min(max, Math.max(min, v));
+  const snap = (v) => clamp(Math.round((min + Math.round((v - min) / step) * step) * 1e10) / 1e10);
+  const render = () => {
+    const p = max > min ? ((value - min) / (max - min)) * 100 : 0;
+    range.style.width = p + "%";
+    thumb.style.left = `calc(${p}% + ${(0.5 - p / 100) * W}px)`;
+    thumb.setAttribute("aria-valuenow", value);
+  };
+  const change = (v) => { v = snap(v); if (v !== value) { value = v; render(); onChange(v); } };
+  const fromPointer = (e) => {
+    const r = root.getBoundingClientRect();
+    change(min + Math.min(1, Math.max(0, (e.clientX - r.left - W / 2) / (r.width - W))) * (max - min));
+  };
+
+  root.onpointerdown = (e) => { root.setPointerCapture(e.pointerId); fromPointer(e); thumb.focus(); };
+  root.onpointermove = (e) => { if (root.hasPointerCapture(e.pointerId)) fromPointer(e); };
+  thumb.onkeydown = (e) => {
+    const d = { ArrowRight: step, ArrowUp: step, ArrowLeft: -step, ArrowDown: -step, PageUp: step * 10, PageDown: -step * 10 }[e.key];
+    if (d !== undefined) { e.preventDefault(); change(value + d); }
+    else if (e.key === "Home") { e.preventDefault(); change(min); }
+    else if (e.key === "End") { e.preventDefault(); change(max); }
+  };
+  return { el: root, set(v) { value = clamp(v); render(); } };
+}
+
+// A number typed as text (digits only), as the shop does it.
+// min and max are kept as the counter keeps them: a number above max is cut at once (more digits can only make
+// it bigger); one below min is allowed while typing ("1" on the way to "15") and fixed when the field is left.
+// min and max may be functions (the limits move with a unit); plain draws a float without trailing zeros.
+const trimNum = (x) => Number(x).toFixed(9).replace(/\.?0+$/, "");
+function NumberInput({ type, decimals = 0, plain = false, min, max, onChange, className = "" }) {
+  let value = 0;
+  let last = "";
+  const lo = () => (typeof min === "function" ? min() : min);
+  const hi = () => (typeof max === "function" ? max() : max);
+  const clamp = (v) => Math.min(hi() ?? Infinity, Math.max(lo() ?? -Infinity, v));
+  const fmt = (v) => (type === "int" ? String(v) : plain ? trimNum(v) : Number(v).toFixed(decimals)); // 0.2 is drawn "0.20": the same width
+  const pattern = type === "int" ? /^-?\d*$/ : /^-?\d*\.?\d*$/;
+  const input = Input({ className, inputMode: type === "int" ? "numeric" : "decimal" });
+  const show = (v) => { input.value = last = fmt(v); };
+  input.oninput = () => {
+    if (!pattern.test(input.value)) { input.value = last; return; }
+    last = input.value;
+    const n = Number(input.value);
+    if (input.value === "" || input.value === "-" || input.value === "." || Number.isNaN(n)) return;
+    value = n;
+    if (hi() != null && n > hi()) { value = hi(); show(value); } // typed past the top: stays at the top
+    onChange(value);
+  };
+  input.onblur = () => { // "1." -> "1.00", "" -> the value, 0.255 -> 0.26, 3 with min 5 -> 5
+    let v = type === "float" ? Number(Number(value).toFixed(decimals)) : value;
+    v = clamp(v);
+    if (v !== value) { value = v; onChange(v); }
+    show(value);
+  };
+  input.onkeyup = (e) => { if (e.key === "Escape" || e.key === "Enter") input.blur(); };
+  return { el: input, get value() { return value; }, set(v) { value = v; if (document.activeElement !== input) show(v); } };
+}
+
+// A duration: a number (digits only, within the limits) and its unit. The wire value stays a Go duration string.
+const UNITS = [["ns", "ns", 1], ["µs", "us", 1e3], ["ms", "ms", 1e6], ["s", "s", 1e9], ["min", "m", 6e10], ["h", "h", 3.6e12]]; // label, Go suffix, nanoseconds
+const GO_UNIT = { ns: 1, us: 1e3, "µs": 1e3, "μs": 1e3, ms: 1e6, s: 1e9, m: 6e10, h: 3.6e12 };
+function parseDur(s) { // "1h30m", "500ms", "1.5s" -> nanoseconds (NaN when it is not a duration)
+  if (typeof s !== "string") return NaN;
+  const neg = s.startsWith("-");
+  const t = s.replace(/^[-+]/, "");
+  if (t === "0") return 0;
+  let total = 0;
+  const rest = t.replace(/(\d+\.?\d*|\.\d+)(ns|us|µs|μs|ms|s|m|h)/g, (_, n, u) => { total += parseFloat(n) * GO_UNIT[u]; return ""; });
+  return t === "" || rest !== "" ? NaN : Math.round(neg ? -total : total);
+}
+function Duration({ min, max, onChange }) {
+  const lo = min != null ? parseDur(min) : null;
+  const hi = max != null ? parseDur(max) : null;
+  const unitOf = (ns) => { // the biggest unit that divides the value evenly
+    if (!ns) return 3;
+    for (let i = UNITS.length - 1; i > 0; i--) if (ns % UNITS[i][2] === 0) return i;
+    return 0;
+  };
+  let first = lo > 0 ? unitOf(lo) : 0; // no unit smaller than the minimum or bigger than the maximum is offered
+  const last = hi > 0 ? unitOf(hi) : UNITS.length - 1;
+  if (first > last) first = last;
+  let idx = Math.min(last, Math.max(first, 3));
+  let ns = null;
+  const per = () => UNITS[idx][2];
+  const emit = () => { ns = Math.round(num.value * per()); onChange(trimNum(num.value) + UNITS[idx][1]); };
+  const num = NumberInput({ type: "float", plain: true, min: lo == null ? undefined : () => lo / per(), max: hi == null ? undefined : () => hi / per(), className: "duration-input", onChange: emit });
+  const unit = Select(UNITS.slice(first, last + 1).map((u) => u[0]), (name) => {
+    idx = UNITS.findIndex((u) => u[0] === name);
+    const v = Math.min(hi == null ? Infinity : hi / per(), Math.max(lo == null ? -Infinity : lo / per(), num.value)); // the same number, in the new unit, kept within the limits
+    num.set(v);
+    emit();
+  });
+  unit.el.classList.add("unit-select");
+  // the width comes from the longest number the field can hold and the longest unit, so nothing moves while typing or switching
+  const range = UNITS.slice(first, last + 1);
+  const digits = Math.max(...range.map((u) => (hi == null ? 8 : trimNum(hi / u[2]).length)));
+  num.el.style.width = `calc(${digits}ch + 24px)`;
+  unit.el.style.width = `calc(${Math.max(...range.map((u) => u[0].length))}ch + 50px)`;
+  return {
+    el: el("div", { className: "duration" }, num.el, unit.el),
+    set(v) {
+      const d = parseDur(v);
+      if (Number.isNaN(d) || d === ns) return; // it is what the field already holds
+      ns = d;
+      idx = Math.min(last, Math.max(first, unitOf(d)));
+      unit.set(UNITS[idx][0]);
+      num.set(d / per());
+    },
+  };
+}
+
+// The quantity control of the shop: plus | input | minus, joined.
+function Counter({ type, decimals, min, max, step, onChange }) {
+  const round = (v) => Math.round(v * 1e10) / 1e10;
+  const clamp = (v) => Math.min(max ?? Infinity, Math.max(min ?? -Infinity, v));
+  const plus = Button({ variant: "secondary", size: "icon", className: "counter-btn counter-plus", ariaLabel: "Increase" }, icon("plus"));
+  const minus = Button({ variant: "secondary", size: "icon", className: "counter-btn counter-minus", ariaLabel: "Decrease" }, icon("minus"));
+  const num = NumberInput({ type, decimals, min, max, className: "counter-input", onChange: (v) => { refresh(); onChange(v); } });
+  // the width of the field comes from the longest value of the range, so the counter never changes size
+  const drawn = (v) => (type === "int" ? String(v) : Number(v).toFixed(decimals));
+  const longest = Math.max(3, ...[min, max].filter((x) => x != null).map((x) => drawn(x).length));
+  num.el.style.width = longest + 1 + "ch";
+
+  const refresh = () => {
+    plus.disabled = max != null && num.value >= max;
+    minus.disabled = min != null && num.value <= min;
+  };
+  const bump = (dir) => { const v = clamp(round(num.value + dir * step)); num.set(v); refresh(); onChange(v); };
+  plus.onclick = () => bump(1);
+  minus.onclick = () => bump(-1);
+
+  return { el: el("div", { className: "counter" }, plus, num.el, minus), set(v) { num.set(v); refresh(); } };
+}
+
+// shadcn Breadcrumb: links to the parents, the current page last and not a link.
+function Breadcrumb(items) {
+  const list = el("ol", { className: "breadcrumb-list" });
+  items.forEach((it, i) => {
+    const last = i === items.length - 1;
+    list.append(el("li", { className: "breadcrumb-item" },
+      last
+        ? el("span", { className: "breadcrumb-page", role: "link", textContent: it.label })
+        : el("a", { className: "breadcrumb-link", href: it.href, textContent: it.label })));
+    if (!last) {
+      const sep = el("li", { className: "breadcrumb-separator", role: "presentation" }, icon("chevronRight"));
+      sep.setAttribute("aria-hidden", "true");
+      list.append(sep);
+    }
+  });
+  return list;
+}
+
+// 1, 2 or 5 times a power of ten, close to span/20: a comfortable step for a decimal range
+function niceStep(span) {
+  const raw = span / 20;
+  const p = 10 ** Math.floor(Math.log10(raw));
+  const m = raw / p;
+  return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p;
+}
+
+// ---- page ----
+
+// Relative URLs, so the page works under any mount prefix.
+async function api(method, path, body) {
+  const headers = {};
+  if (token) headers.Authorization = "Bearer " + token;
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  const res = await fetch(path, {
+    method, headers, cache: "no-store",
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (res.status === 401) { showAuth(); throw new AuthError(); }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+function showAuth() {
+  if (authShown) return; // the 5s refresh must not wipe what is being typed
+  authShown = true;
+  const input = Input({ type: "password", placeholder: "API token" });
+  const go = () => { token = input.value; sessionStorage.setItem("tunables-token", token); signature = null; authShown = false; load(); };
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+  $("root").replaceChildren(el("div", { className: "auth" }, input, Button({ onclick: go }, "Open")));
+  rows.clear();
+}
+
+// The header shows Save / Discard only while there are unsaved edits.
+function updateBar() {
+  const dirty = pending.size > 0;
+  $("actions").hidden = !dirty;
+  for (const b of $("actions").querySelectorAll("button")) b.disabled = saving;
+}
+
+function tree(fields) {
+  const root = { key: "", rows: [], groups: new Map() };
+  for (const f of fields) {
+    const parts = f.key.split(".");
+    let node = root;
+    for (const p of parts.slice(0, -1)) {
+      if (!node.groups.has(p)) node.groups.set(p, { key: node.key ? node.key + "." + p : p, rows: [], groups: new Map() });
+      node = node.groups.get(p);
+    }
+    node.rows.push({ name: parts[parts.length - 1], f });
+  }
+  return root;
+}
+
+// "child of" dots before a heading: none for the 1st level, one for the 2nd, two for the 3rd.
+function depthMarker(level) {
+  if (level < 2) return [];
+  const m = el("span", { className: "depth" });
+  for (let i = 1; i < Math.min(level, 3); i++) m.append(el("i", { className: "dot" }));
+  return [m];
+}
+
+// Groups nest as they do in the struct (up to 3 levels): a heading, a card with its fields, then its subgroups.
+// The hierarchy is the size of the heading and the faint "child of" dots before it; breadcrumbs are only at the top of a group's page.
+function renderGroup(node, level, name) {
+  const meta = groupMeta.get(node.key) || {};
+  const title = meta.name || name;
+  const section = el("section", { className: "group level-" + Math.min(level, 3) });
+  if (level > 0) {
+    const link = el("a", { className: "heading-link", href: "#/" + encodeURIComponent(node.key), title: "Open " + title }, title, icon("chevronRight"));
+    const heading = el("h" + Math.min(level + 1, 4), { className: "heading" }, ...depthMarker(level), link);
+    const head = el("div", { className: "group-head" }, heading);
+    if (meta.desc) head.append(el("p", { textContent: meta.desc }));
+    section.append(head);
+  }
+  if (node.rows.length) section.append(rowsCard(node, level === 0));
+  for (const [childName, child] of node.groups) section.append(renderGroup(child, level + 1, childName));
+  return section;
+}
+
+// The fields of a group go into a card; the ones of the root (no struct around them) are plain rows.
+function rowsCard(node, plain = false) {
+  const card = el("div", { className: plain ? "rows" : "card" });
+  for (const r of node.rows) {
+    const row = makeRow(r.f.name || r.name, r.f);
+    rows.set(r.f.key, row);
+    card.append(row.el);
+  }
+  return card;
+}
+
+// A group opened on its own page (#/checkout.button): only the fields of that struct, and its subgroups.
+function renderPage(node, ancestors) {
+  const depth = ancestors.length; // the nesting of this group: its text is as big as it is in the whole view
+  const meta = groupMeta.get(node.key) || {};
+  const page = el("div", { className: "page" });
+  // the title of the page: the group's own heading (the breadcrumbs above only say where it is)
+  const section = el("section", { className: "group level-" + Math.min(depth, 3) });
+  const head = el("div", { className: "group-head" }, el("h" + Math.min(depth + 1, 4), { className: "heading" }, ...depthMarker(depth), el("span", { textContent: ancestors[depth - 1] })));
+  if (meta.desc) head.append(el("p", { textContent: meta.desc }));
+  section.append(head);
+  if (node.rows.length) section.append(rowsCard(node));
+  page.append(section);
+  for (const [childName, child] of node.groups) page.append(renderGroup(child, depth + 1, childName));
+  return page;
+}
+
+// ---- routing: "#/checkout.button" is the page of that group, "" is the whole thing ----
+let lastData = null;
+const routeKey = () => (location.hash.startsWith("#/") ? decodeURIComponent(location.hash.slice(2)) : "");
+function findNode(root, key) {
+  let n = root;
+  for (const part of key.split(".")) { n = n.groups.get(part); if (!n) return null; }
+  return n;
+}
+
+// The component of a field is chosen by the schema (`ui`); these are the defaults by type.
+const DEFAULT_UI = { bool: "switch", enum: "select", int: "counter", float: "counter", string: "input", duration: "input" };
+
+// A row edits locally: changes go to `pending` and are sent by Save.
+function makeRow(name, f) {
+  const current = () => (pending.has(f.key) ? pending.get(f.key) : f.value);
+  const mark = () => root.classList.toggle("dirty", pending.has(f.key)); // an orange * after the name while unsaved
+  const same = (a, b) => (f.type === "duration" ? parseDur(a) === parseDur(b) : a === b); // "1m0s" is "60s"
+  const stage = (v) => {
+    if (same(v, f.value)) pending.delete(f.key); else pending.set(f.key, v);
+    message.hidden = true;
+    mark();
+    updateBar();
+  };
+
+  const text = el("div", { className: "field-text" }, el("div", { className: "label", textContent: name }));
+  if (f.desc) text.append(el("p", { className: "description", textContent: f.desc }));
+  const message = el("p", { className: "message", hidden: true });
+  text.append(message);
+
+  const ctl = el("div", { className: "ctl" });
+  const ui = f.ui || DEFAULT_UI[f.type];
+
+  // a number: its step, and how many decimals it is drawn with (from the schema, else from the step)
+  const bounded = f.min != null && f.max != null;
+  let step = f.type === "int" ? 1 : bounded ? niceStep(f.max - f.min) : 0.1;
+  if (f.type === "float" && f.precision != null) step = Math.max(step, 10 ** -f.precision);
+  const decimals = f.type === "int" ? 0 : f.precision ?? (String(step).split(".")[1] || "").length;
+  const fmt = (v) => Number(v).toFixed(decimals);
+  let setValue;
+  let block = false;
+
+  if (ui === "switch" || ui === "checkbox") {
+    const c = (ui === "switch" ? Switch : Checkbox)(stage);
+    setValue = c.set;
+    ctl.append(c.el);
+  } else if (ui === "select") {
+    const c = Select(f.enum, stage);
+    c.el.classList.add("w-field");
+    setValue = c.set;
+    ctl.append(c.el);
+  } else if (ui === "buttons") {
+    const c = ButtonGroup(f.enum, stage);
+    setValue = c.set;
+    ctl.append(c.el);
+  } else if (ui === "textarea") {
+    const c = Textarea(stage);
+    block = true;
+    setValue = c.set;
+    ctl.append(c.el);
+  } else if (ui === "slider") {
+    // the value is a field next to the track: drag the slider, or type the number, either one moves the other
+    const input = NumberInput({ type: f.type, decimals, min: f.min, max: f.max, className: "slider-input", onChange: (v) => { stage(v); slider.set(v); } });
+    input.el.style.width = `calc(${Math.max(fmt(f.min).length, fmt(f.max).length)}ch + 28px)`; // fits the longest value: nothing moves
+    const slider = Slider({ min: f.min, max: f.max, step, onChange: (v) => { stage(v); input.set(v); } });
+    ctl.append(
+      el("div", { className: "w-slider slider-line" }, el("span", { className: "slider-end", textContent: fmt(f.min) }), slider.el, el("span", { className: "slider-end", textContent: fmt(f.max) })),
+      input.el,
+    );
+    setValue = (v) => { slider.set(v); input.set(v); };
+  } else if (ui === "counter") {
+    const c = Counter({ type: f.type, decimals, min: f.min, max: f.max, step, onChange: stage });
+    setValue = c.set;
+    ctl.append(c.el);
+  } else if (f.type === "int" || f.type === "float") { // ui "input" on a number
+    const c = NumberInput({ type: f.type, decimals, min: f.min, max: f.max, className: bounded ? "num-field" : "w-field", onChange: stage });
+    if (bounded) c.el.style.width = `calc(${Math.max(fmt(f.min).length, fmt(f.max).length, 3)}ch + 28px)`; // fits the longest value
+    setValue = c.set;
+    ctl.append(c.el);
+  } else if (f.type === "duration") {
+    const c = Duration({ min: f.min, max: f.max, onChange: stage });
+    setValue = c.set;
+    ctl.append(c.el);
+  } else {
+    const input = Input({ className: "w-field" });
+    input.oninput = () => stage(input.value);
+    setValue = (v) => { input.value = v; };
+    ctl.append(input);
+  }
+
+  const root = el("div", { className: "field" + (block ? " field-block" : "") }, text, ctl);
+  root.title = "default: " + f.default;
+
+  // The server's view changed (after Save or the periodic refresh): keep unsaved edits, update the rest.
+  function apply(next) {
+    f = next;
+    if (pending.has(f.key) && same(pending.get(f.key), f.value)) pending.delete(f.key);
+    if (!pending.has(f.key) && !root.contains(document.activeElement)) setValue(f.value);
+    root.title = "default: " + f.default;
+    mark();
+  }
+  // Drop this row's unsaved edit.
+  function discard() {
+    pending.delete(f.key);
+    setValue(f.value);
+    message.hidden = true;
+    mark();
+  }
+  setValue(current());
+  mark(); // a row built while its edit is still unsaved (another page, a rebuild) shows the star at once
+  return { el: root, apply, discard, fail(msg) { message.textContent = msg || ""; message.hidden = !msg; } };
+}
+
+async function saveAll() {
+  if (saving || pending.size === 0) return;
+  saving = true;
+  updateBar();
+  try {
+    for (const [key, value] of [...pending]) {
+      const row = rows.get(key);
+      try {
+        const next = await api("PUT", "values/" + encodeURIComponent(key), { value });
+        pending.delete(key);
+        if (row) { row.fail(null); row.apply(next); }
+      } catch (e) {
+        if (e instanceof AuthError) return;
+        if (row) row.fail(e.message); // stays pending, so Save can be retried after fixing it
+      }
+    }
+  } finally {
+    saving = false;
+    updateBar();
+  }
+  await load(); // fields that are not on this page are fresh when it is left
+}
+
+function discardAll() {
+  if (saving) return;
+  for (const key of [...pending.keys()]) {
+    const row = rows.get(key);
+    if (row) row.discard(); else pending.delete(key);
+  }
+  updateBar();
+}
+
+// Builds (or refreshes) the page from the schema; used for the data that came with the page and for every poll.
+function show(meta, schema) {
+  lastData = { meta, schema };
+  groupMeta = new Map((schema.groups || []).map((g) => [g.key, g]));
+  const root = tree(schema.fields);
+  let key = routeKey();
+  let node = key ? findNode(root, key) : root;
+  if (!node) { // an old link to a group that is gone: show everything
+    key = "";
+    node = root;
+    history.replaceState(null, "", location.pathname + location.search);
+  }
+  const parts = key ? key.split(".") : [];
+  const titles = parts.map((seg, i) => (groupMeta.get(parts.slice(0, i + 1).join(".")) || {}).name || seg);
+
+  $("banner").hidden = true;
+  $("desc").textContent = key ? "" : (meta.description || "").trim(); // on a group's page the description sits under its heading
+  document.title = [...titles.slice(-1), meta.name, "tunables"].join(" · ");
+
+  // the header: the name on the main page; Back and breadcrumbs on the page of a group
+  $("name").textContent = meta.name;
+  $("heroName").textContent = meta.name;
+  $("hero").hidden = !!key; // the name and the description are the top of the main page only
+  $("name").hidden = !!key;
+  $("back").hidden = !key;
+  if (key) $("back").href = "#" + (key.includes(".") ? "/" + encodeURIComponent(key.slice(0, key.lastIndexOf("."))) : ""); // up one level
+  $("crumbs").hidden = !key;
+  if (key) {
+    $("crumbs").replaceChildren(Breadcrumb([
+      { label: meta.name, href: "#" },
+      ...titles.slice(0, -1).map((label, i) => ({ label, href: "#/" + encodeURIComponent(parts.slice(0, i + 1).join(".")) })),
+      { label: titles[titles.length - 1] },
+    ]));
+  }
+
+  const sig = JSON.stringify([key, schema.groups, schema.fields.map((f) => [f.key, f.name, f.type, f.ui, f.enum, f.min, f.max, f.desc])]);
+  if (sig !== signature) { // first render, another page, or the schema changed under us: rebuild, keeping unsaved edits
+    signature = sig;
+    const keys = new Set(schema.fields.map((f) => f.key));
+    for (const k of [...pending.keys()]) if (!keys.has(k)) pending.delete(k);
+    rows.clear();
+    $("root").replaceChildren(key ? renderPage(node, titles) : renderGroup(root, 0, "", []));
+  } else {
+    for (const f of schema.fields) {
+      const row = rows.get(f.key);
+      if (row) row.apply(f);
+    }
+  }
+  updateBar();
+  updateNavbar();
+}
+
+// The navbar is see-through while the hero is in view; when the hero has gone under it the navbar gets its blur,
+// its line and the name (a group's page has no hero: it gets them as soon as the page is scrolled).
+function updateNavbar() {
+  const bar = $("bar");
+  const stuck = $("hero").hidden ? scrollY > 8 : $("heroName").getBoundingClientRect().bottom <= bar.offsetHeight;
+  bar.classList.toggle("stuck", stuck);
+}
+
+async function load() {
+  try {
+    const [meta, schema] = await Promise.all([api("GET", "meta"), api("GET", "schema")]);
+    show(meta, schema);
+  } catch (e) {
+    if (e instanceof AuthError) return;
+    $("banner").textContent = "Could not load: " + e.message;
+    $("banner").hidden = false;
+  }
+}
+
+const back = el("a", { id: "back", className: "btn btn-link size-default", title: "Back", hidden: true }, icon("arrowLeft"), el("span", { textContent: "Back" }));
+document.querySelector(".title").prepend(back);
+addEventListener("hashchange", () => { scrollTo(0, 0); if (lastData) show(lastData.meta, lastData.schema); });
+let scrollFrame = 0;
+addEventListener("scroll", () => { cancelAnimationFrame(scrollFrame); scrollFrame = requestAnimationFrame(updateNavbar); }, { passive: true });
+
+$("actions").append(
+  // words on a desktop, icons on a phone (CSS)
+  Button({ variant: "outline", id: "discard", className: "action", title: "Drop all unsaved changes", ariaLabel: "Discard", onclick: discardAll }, icon("luRotateCcw"), el("span", { className: "btn-text", textContent: "Discard" })),
+  Button({ id: "save", className: "action", title: "Save (Ctrl/Cmd+S)", ariaLabel: "Save", onclick: saveAll }, icon("luCheck"), el("span", { className: "btn-text", textContent: "Save" })),
+);
+addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") { e.preventDefault(); saveAll(); }
+});
+addEventListener("beforeunload", (e) => { if (pending.size) e.preventDefault(); });
+
+// The server puts the current values into the page (not when a token is set): render them right away, with no
+// request and no empty first paint, then keep the page live by polling.
+const boot = JSON.parse($("boot").textContent);
+if (boot) show(boot.meta, boot.schema); else load();
+setInterval(load, 5000);
+</script>
+</body>
+</html>

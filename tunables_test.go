@@ -108,7 +108,7 @@ func TestUnnamedGroupGetsADefaultName(t *testing.T) {
 }
 
 func TestNewRejectsBadSchemas(t *testing.T) {
-	type slice struct{ X []string }
+	type slice struct{ X []struct{ A int } }
 	type badEnum struct {
 		X int `tune:"enum:a,b"`
 	}

@@ -36,6 +36,7 @@ type fieldDTO struct {
 	Key       string   `json:"key"`
 	Name      string   `json:"name,omitempty"`
 	Type      string   `json:"type"`
+	Item      string   `json:"item,omitempty"` // a list or a set: the type of an item; enum, min, max and precision are the item's
 	UI        string   `json:"ui"`
 	Precision *int     `json:"precision,omitempty"` // digits after the point to show for a float
 	Desc      string   `json:"desc,omitempty"`
@@ -45,6 +46,8 @@ type fieldDTO struct {
 	Enum      []string `json:"enum,omitempty"`
 	Min       any      `json:"min,omitempty"`
 	Max       any      `json:"max,omitempty"`
+	MinLen    *int     `json:"minlen,omitempty"` // a list or a set: how many items
+	MaxLen    *int     `json:"maxlen,omitempty"`
 }
 
 func (c *core) handler() http.Handler {
@@ -199,20 +202,16 @@ type groupDTO struct {
 
 func (c *core) dto(f *field, s *snapshot) fieldDTO {
 	cur := f.read(s.cfg.Elem().FieldByIndex(f.index))
-	return fieldDTO{
-		Key:       f.key,
-		Name:      f.name,
-		Type:      f.apiType(),
-		UI:        f.ui,
-		Precision: f.prec,
-		Desc:      f.desc,
-		Default:   jsonValue(f.def),
-		Value:     jsonValue(cur),
-		Modified:  cur != f.def,
-		Enum:      f.enum,
-		Min:       f.bound(f.min),
-		Max:       f.bound(f.max),
+	item := f // the field that holds the enum and the bounds: the item of a list or a set
+	d := fieldDTO{MinLen: f.minLen, MaxLen: f.maxLen}
+	if f.collection() {
+		item = f.elem
+		d.Item = item.apiType()
 	}
+	d.Key, d.Name, d.Type, d.UI, d.Desc = f.key, f.name, f.apiType(), f.ui, f.desc
+	d.Precision, d.Enum, d.Min, d.Max = item.prec, item.enum, item.bound(item.min), item.bound(item.max)
+	d.Default, d.Value, d.Modified = jsonValue(f.def), jsonValue(cur), !f.same(cur, f.def)
+	return d
 }
 
 func (c *core) writeJSON(w http.ResponseWriter, status int, v any) {

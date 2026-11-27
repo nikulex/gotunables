@@ -84,14 +84,25 @@ button,input,textarea{font-family:inherit}
 .duration .unit-select{flex:none;width:auto;height:100%;margin:0;gap:4px;border:0;border-left:1px solid hsl(var(--input));border-radius:0;background:hsl(var(--muted));box-shadow:none;padding:0 10px 0 12px;font-weight:500;color:hsl(var(--foreground))}
 .duration .unit-select:hover,.duration .unit-select:focus{background:hsl(var(--accent));box-shadow:none}
 .num-field{flex:none;text-align:right;font-variant-numeric:tabular-nums}
+.chips-box{display:flex;flex-direction:column;align-items:flex-start;gap:10px;width:100%}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:2px;max-width:100%;border:1px solid transparent;border-radius:calc(var(--radius) - 2px);background:hsl(var(--secondary));color:hsl(var(--secondary-foreground));padding:2px 4px 2px 10px;font-size:14px;line-height:20px;font-weight:500;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.chip-x{display:inline-flex;flex:none;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:0;border-radius:calc(var(--radius) - 4px);background:transparent;color:hsl(var(--muted-foreground));cursor:pointer}
+.chip-x:hover{background:hsl(var(--accent));color:hsl(var(--accent-foreground))}
+.chip-x:focus-visible{outline:none;box-shadow:0 0 0 1px hsl(var(--ring))}
+.chip-x svg{width:14px;height:14px}
+.chips-empty{font-size:14px;line-height:28px;color:hsl(var(--muted-foreground))}
+.adder{display:flex;align-items:center;gap:8px;max-width:100%}
+.chip-input{flex:none;width:12rem}
+.chip-add{flex:none}
 .slider-input{flex:none;width:auto;padding:0 10px;text-align:right;font-variant-numeric:tabular-nums}
 
 /* ---- Counter: the quantity control of the shop (plus | input | minus), joined ---- */
 .counter{display:flex;flex:none;justify-content:space-between}
 .btn.counter-btn{background:hsl(var(--grey));color:hsl(var(--secondary-foreground))}
 .btn.counter-btn:hover{background:hsl(var(--grey-hover))}
-.counter-plus{border-radius:calc(var(--radius) - 2px) 0 0 calc(var(--radius) - 2px)}
-.counter-minus{border-radius:0 calc(var(--radius) - 2px) calc(var(--radius) - 2px) 0}
+.counter-minus{border-radius:calc(var(--radius) - 2px) 0 0 calc(var(--radius) - 2px)}
+.counter-plus{border-radius:0 calc(var(--radius) - 2px) calc(var(--radius) - 2px) 0}
 .counter-input{flex:none;min-width:2.4rem;padding:0;text-align:center;border-radius:0} /* the width is set from the longest value */
 
 /* ---- Breadcrumb ---- */
@@ -253,6 +264,7 @@ const ICON = {
   arrowLeft: '<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>',
   luCheck: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>',
   luRotateCcw: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>',
+  luX: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
   plus: '<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>',
   minus: '<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"></line></svg>',
 };
@@ -429,7 +441,7 @@ function Slider({ min, max, step, onChange }) {
 // it bigger); one below min is allowed while typing ("1" on the way to "15") and fixed when the field is left.
 // min and max may be functions (the limits move with a unit); plain draws a float without trailing zeros.
 const trimNum = (x) => Number(x).toFixed(9).replace(/\.?0+$/, "");
-function NumberInput({ type, decimals = 0, plain = false, min, max, onChange, className = "" }) {
+function NumberInput({ type, decimals = 0, plain = false, empty = false, min, max, onChange = () => {}, className = "" }) {
   let value = 0;
   let last = "";
   const lo = () => (typeof min === "function" ? min() : min);
@@ -449,13 +461,20 @@ function NumberInput({ type, decimals = 0, plain = false, min, max, onChange, cl
     onChange(value);
   };
   input.onblur = () => { // "1." -> "1.00", "" -> the value, 0.255 -> 0.26, 3 with min 5 -> 5
+    if (empty && input.value === "") return; // a field to add a value with: blank stays blank
     let v = type === "float" ? Number(Number(value).toFixed(decimals)) : value;
     v = clamp(v);
     if (v !== value) { value = v; onChange(v); }
     show(value);
   };
   input.onkeyup = (e) => { if (e.key === "Escape" || e.key === "Enter") input.blur(); };
-  return { el: input, get value() { return value; }, set(v) { value = v; if (document.activeElement !== input) show(v); } };
+  return {
+    el: input,
+    get value() { return value; },
+    get filled() { return !["", "-", "."].includes(input.value); },
+    clear() { input.value = last = ""; },
+    set(v) { value = v; if (document.activeElement !== input) show(v); },
+  };
 }
 
 // A duration: a number (digits only, within the limits) and its unit. The wire value stays a Go duration string.
@@ -511,6 +530,93 @@ function Duration({ min, max, onChange }) {
   };
 }
 
+// A list or a set: its items as removable chips, and a control of the item's own type to add one.
+function Chips(f, onChange) {
+  const isSet = f.type === "set";
+  const prec = f.precision;
+  const same = (a, b) => (f.item === "duration" ? parseDur(a) === parseDur(b) : a === b);
+  const order = (a, b) => (f.item === "duration" ? parseDur(a) - parseDur(b) : a < b ? -1 : a > b ? 1 : 0);
+  const show = (x) => {
+    if (f.item === "duration") {
+      const ns = parseDur(x);
+      const i = ns ? UNITS.findLastIndex((u) => ns % u[2] === 0) : 3;
+      return trimNum(ns / UNITS[Math.max(i, 0)][2]) + " " + UNITS[Math.max(i, 0)][0];
+    }
+    if (f.item === "float" && prec != null) return Number(x).toFixed(prec);
+    return String(x);
+  };
+  let items = [];
+  const chips = el("div", { className: "chips" });
+  const full = () => f.maxlen != null && items.length >= f.maxlen;
+
+  function render() {
+    chips.replaceChildren();
+    if (items.length === 0) chips.append(el("span", { className: "chips-empty", textContent: "No items" }));
+    items.forEach((x, i) => {
+      const rm = el("button", { type: "button", className: "chip-x", ariaLabel: "Remove " + show(x) }, icon("luX"));
+      rm.onclick = () => { items = items.filter((_, j) => j !== i); render(); onChange(items.slice()); };
+      chips.append(el("span", { className: "chip" }, el("span", { textContent: show(x) }), rm));
+    });
+    adder.disabled(full());
+  }
+  function add(v) {
+    if (full() || (isSet && items.some((x) => same(x, v)))) return false;
+    items = [...items, v];
+    if (isSet) items.sort(order);
+    render();
+    onChange(items.slice());
+    return true;
+  }
+
+  // the control that makes the next item; take() returns it (or undefined while the control holds nothing)
+  const add_ = Button({ variant: "secondary", size: "icon", className: "chip-add", ariaLabel: "Add" }, icon("plus"));
+  let take = () => undefined;
+  let clear = () => {};
+  let control;
+  let focusable;
+  if (f.item === "int" || f.item === "float") {
+    const num = NumberInput({ type: f.item, plain: true, empty: true, min: f.min, max: f.max, className: "chip-input" });
+    control = num.el;
+    focusable = num.el;
+    take = () => { if (!num.filled) return undefined; num.el.blur(); return num.value; }; // blur applies the limits
+    clear = () => num.clear();
+  } else if (f.item === "string") {
+    const input = Input({ className: "chip-input" });
+    control = input;
+    focusable = input;
+    take = () => (input.value.trim() === "" ? undefined : input.value.trim());
+    clear = () => { input.value = ""; };
+  } else if (f.item === "duration") {
+    let cur = f.min || "1s";
+    const d = Duration({ min: f.min, max: f.max, onChange: (v) => { cur = v; } });
+    d.set(cur);
+    control = d.el;
+    take = () => cur;
+  } else { // an enum, or true/false
+    const options = f.item === "bool" ? ["true", "false"] : f.enum;
+    let cur = options[0];
+    const sel = Select(options, (v) => { cur = v; });
+    sel.set(cur);
+    sel.el.classList.add("chip-input");
+    control = sel.el;
+    take = () => (f.item === "bool" ? cur === "true" : cur);
+  }
+  const adder = {
+    disabled(on) { add_.disabled = on; if (focusable) focusable.disabled = on; },
+  };
+  const submit = () => {
+    const v = take();
+    if (v === undefined) return;
+    if (add(v)) clear();
+  };
+  add_.onclick = submit;
+  if (focusable) focusable.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } });
+
+  const root = el("div", { className: "chips-box" }, chips, el("div", { className: "adder" }, control, add_));
+  render();
+  return { el: root, set(v) { items = isSet ? [...v].sort(order) : [...v]; render(); } };
+}
+
 // The quantity control of the shop: plus | input | minus, joined.
 function Counter({ type, decimals, min, max, step, onChange }) {
   const round = (v) => Math.round(v * 1e10) / 1e10;
@@ -531,7 +637,7 @@ function Counter({ type, decimals, min, max, step, onChange }) {
   plus.onclick = () => bump(1);
   minus.onclick = () => bump(-1);
 
-  return { el: el("div", { className: "counter" }, plus, num.el, minus), set(v) { num.set(v); refresh(); } };
+  return { el: el("div", { className: "counter" }, minus, num.el, plus), set(v) { num.set(v); refresh(); } };
 }
 
 // shadcn Breadcrumb: links to the parents, the current page last and not a link.
@@ -671,13 +777,16 @@ function findNode(root, key) {
 }
 
 // The component of a field is chosen by the schema (`ui`); these are the defaults by type.
-const DEFAULT_UI = { bool: "switch", enum: "select", int: "counter", float: "counter", string: "input", duration: "input" };
+const DEFAULT_UI = { bool: "switch", enum: "select", int: "counter", float: "counter", string: "input", duration: "input", list: "chips", set: "chips" };
 
 // A row edits locally: changes go to `pending` and are sent by Save.
 function makeRow(name, f) {
   const current = () => (pending.has(f.key) ? pending.get(f.key) : f.value);
   const mark = () => root.classList.toggle("dirty", pending.has(f.key)); // an orange * after the name while unsaved
-  const same = (a, b) => (f.type === "duration" ? parseDur(a) === parseDur(b) : a === b); // "1m0s" is "60s"
+  const itemSame = (a, b) => (f.item === "duration" || f.type === "duration" ? parseDur(a) === parseDur(b) : a === b); // "1m0s" is "60s"
+  const same = (a, b) => (Array.isArray(a) && Array.isArray(b)
+    ? a.length === b.length && (f.type === "set" ? a.every((x) => b.some((y) => itemSame(x, y))) : a.every((x, i) => itemSame(x, b[i])))
+    : itemSame(a, b));
   const stage = (v) => {
     if (same(v, f.value)) pending.delete(f.key); else pending.set(f.key, v);
     message.hidden = true;
@@ -713,6 +822,11 @@ function makeRow(name, f) {
     ctl.append(c.el);
   } else if (ui === "buttons") {
     const c = ButtonGroup(f.enum, stage);
+    setValue = c.set;
+    ctl.append(c.el);
+  } else if (ui === "chips") {
+    const c = Chips(f, stage);
+    block = true;
     setValue = c.set;
     ctl.append(c.el);
   } else if (ui === "textarea") {

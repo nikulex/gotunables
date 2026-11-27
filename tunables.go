@@ -15,8 +15,9 @@
 //
 //	if t.Get().Checkout.Enabled { ... }
 //
-// Supported field types: bool, string (optionally an enum), signed and unsigned integers, floats and
-// time.Duration; nested and embedded structs become groups.
+// Supported field types: bool, string (optionally an enum), signed and unsigned integers of every size, floats
+// (float32, float64) and time.Duration; a slice []T or a Set[T] of any of those (the options below then
+// apply to each item); nested and embedded structs become groups.
 //
 // The key of a field is taken from its json tag, then yaml, then the lower-cased Go name (`json:"-"` skips
 // it). Everything else goes into one tag, `tune`, as `key:value` options separated by ";":
@@ -26,7 +27,8 @@
 //	desc     description in the UI (also on a nested struct)
 //	default  the default (otherwise the value in the struct passed to New)
 //	enum     allowed values of a string field: enum:blue,green,red
-//	min,max  bounds of a number; durations like min:10ms
+//	min,max  bounds of a number; durations like min:10ms (for a list or a set: of each item)
+//	minlen,maxlen  how many items a list or a set may hold
 //
 // `tune:"-"` skips a field.
 package tunables
@@ -39,6 +41,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -92,14 +95,45 @@ func (t *Tunables[T]) Get() *T {
 // Set changes one setting by key ("checkout.max_items"); value is a Go value of the field's type (a
 // time.Duration for durations). It runs the same validation as the UI.
 func (t *Tunables[T]) Set(key string, value any) error {
-	if d, ok := value.(time.Duration); ok {
-		value = d.String()
-	}
-	raw, err := json.Marshal(value)
+	raw, err := json.Marshal(wireValue(reflect.ValueOf(value)))
 	if err != nil {
 		return &valueError{key: key, reason: err.Error()}
 	}
 	return t.c.set(key, raw)
+}
+
+// wireValue turns a Go value into what the API takes: durations become strings ("1m30s"), also inside a list or a
+// Set, whose items go in an array.
+func wireValue(v reflect.Value) any {
+	if !v.IsValid() {
+		return nil
+	}
+	if v.Type() == durationType {
+		return time.Duration(v.Int()).String()
+	}
+	switch v.Kind() {
+	case reflect.Slice:
+		if v.IsNil() {
+			return []any{}
+		}
+		fallthrough
+	case reflect.Array:
+		out := make([]any, v.Len())
+		for i := range out {
+			out[i] = wireValue(v.Index(i))
+		}
+		return out
+	case reflect.Map:
+		if _, ok := v.Interface().(setMarker); ok {
+			out := make([]any, 0, v.Len())
+			for it := v.MapRange(); it.Next(); {
+				out = append(out, wireValue(it.Key()))
+			}
+			slices.SortFunc(out, cmpAny)
+			return out
+		}
+	}
+	return v.Interface()
 }
 
 // Reset puts one setting back to its default.

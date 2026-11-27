@@ -4,6 +4,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"reflect"
 	"time"
 
 	tunables "github.com/nikulex/gotunables"
@@ -24,6 +25,14 @@ type Features struct {
 			Label string `json:"label" tune:"default:Buy now"`
 		} `json:"button" tune:"name:Buy button"`
 	} `json:"checkout" tune:"name:Checkout; desc:Cart and payment"`
+
+	Access struct {
+		Admins  tunables.Set[int64]  `json:"admins" tune:"desc:Telegram ids of the admins; default:101,205; min:1"`
+		Days    tunables.Set[string] `json:"days" tune:"name:Working days; enum:mon,tue,wed,thu,fri,sat,sun; default:mon,tue,wed,thu,fri"`
+		Origins []string             `json:"origins" tune:"desc:Allowed origins, in this order; default:https://a.example,https://b.example; maxlen:5"`
+		Waits   []time.Duration      `json:"waits" tune:"name:Retry waits; default:1s,5s,30s; min:100ms; max:10m"`
+		Ratios  []float32            `json:"ratios" tune:"desc:Weights; min:0; max:1; precision:2; default:0.25,0.5"`
+	} `json:"access" tune:"desc:Lists and sets"`
 
 	Retry struct {
 		Count  int `yaml:"count" tune:"default:3; min:0; max:10"`
@@ -57,7 +66,7 @@ func main() {
 		last := *t.Get()
 		log.Printf("%+v", last)
 		for range time.Tick(time.Second) {
-			if c := *t.Get(); c != last {
+			if c := *t.Get(); !reflect.DeepEqual(c, last) {
 				last = c
 				log.Printf("%+v", c)
 			}
